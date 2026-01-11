@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'admin_routes.dart';
+import 'auth_signup_routes.dart';
+import 'vendor_approval_routes.dart';
 
 import '../../features/onboarding/presentation/splash_screen.dart';
 import '../../features/onboarding/presentation/role_select_screen.dart';
@@ -102,6 +104,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/rate', builder: (context, state) => const OrderRateScreen()),
        // ✅ ADD THIS (this registers /a/overview and all admin routes)
       ...adminRoutes,
+      ...authSignupRoutes,
+      ...vendorApprovalRoutes,
+
     ],
   );
 });
