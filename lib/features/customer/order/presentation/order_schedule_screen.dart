@@ -23,40 +23,13 @@ class OrderScheduleScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             children: [
               const SectionTitle('Pickup'),
-              _ChoiceTile(
-                title: 'ASAP (Today)',
-                subtitle: 'We’ll arrange pickup soonest available',
-                selected: draft.pickupOption == PickupOption.asap,
-                onTap: () => ctrl.setPickupOption(PickupOption.asap),
-              ),
-              _ChoiceTile(
-                title: 'Tomorrow',
-                subtitle: 'Next-day pickup',
-                selected: draft.pickupOption == PickupOption.tomorrow,
-                onTap: () => ctrl.setPickupOption(PickupOption.tomorrow),
-              ),
-              _ChoiceTile(
-                title: 'Schedule',
-                subtitle: 'Pick a specific time (UI placeholder)',
-                selected: draft.pickupOption == PickupOption.scheduled,
-                onTap: () => ctrl.setPickupOption(PickupOption.scheduled),
-              ),
-
+              _ChoiceTile(title: 'ASAP (Today)', subtitle: 'We’ll arrange pickup soonest available', selected: draft.pickupOption == PickupOption.asap, onTap: () => ctrl.setPickupOption(PickupOption.asap)),
+              _ChoiceTile(title: 'Tomorrow', subtitle: 'Next-day pickup', selected: draft.pickupOption == PickupOption.tomorrow, onTap: () => ctrl.setPickupOption(PickupOption.tomorrow)),
+              _ChoiceTile(title: 'Schedule', subtitle: 'Pick a specific time (UI placeholder)', selected: draft.pickupOption == PickupOption.scheduled, onTap: () => ctrl.setPickupOption(PickupOption.scheduled)),
               const SizedBox(height: 18),
               const SectionTitle('Delivery'),
-              _ChoiceTile(
-                title: 'Pickup & Deliver',
-                subtitle: 'We deliver back to you',
-                selected: draft.deliveryOption == DeliveryOption.pickupAndDeliver,
-                onTap: () => ctrl.setDeliveryOption(DeliveryOption.pickupAndDeliver),
-              ),
-              _ChoiceTile(
-                title: 'Walk-in',
-                subtitle: 'Bring and pick up yourself (cheaper)',
-                selected: draft.deliveryOption == DeliveryOption.walkIn,
-                onTap: () => ctrl.setDeliveryOption(DeliveryOption.walkIn),
-              ),
-
+              _ChoiceTile(title: 'Pickup & Deliver', subtitle: 'We deliver back to you', selected: draft.deliveryOption == DeliveryOption.pickupAndDeliver, onTap: () => ctrl.setDeliveryOption(DeliveryOption.pickupAndDeliver)),
+              _ChoiceTile(title: 'Walk-in', subtitle: 'Bring and pick up yourself (cheaper)', selected: draft.deliveryOption == DeliveryOption.walkIn, onTap: () => ctrl.setDeliveryOption(DeliveryOption.walkIn)),
               const SizedBox(height: 18),
               const SectionTitle('Address'),
               Card(
@@ -78,7 +51,7 @@ class OrderScheduleScreen extends ConsumerWidget {
               title: 'Estimated total: ₱ ${draft.total}',
               subtitle: 'Includes delivery + service fee (placeholder)',
               buttonText: 'Review',
-              onPressed: () => context.go('/c/order/review'),
+              onPressed: () => context.push('/c/order/review'),
             ),
           ),
         ],
@@ -88,13 +61,7 @@ class OrderScheduleScreen extends ConsumerWidget {
 }
 
 class _ChoiceTile extends StatelessWidget {
-  const _ChoiceTile({
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
+  const _ChoiceTile({required this.title, required this.subtitle, required this.selected, required this.onTap});
   final String title;
   final String subtitle;
   final bool selected;

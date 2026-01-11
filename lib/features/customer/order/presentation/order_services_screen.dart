@@ -25,20 +25,14 @@ class OrderServicesScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             children: [
               const SectionTitle('What should we wash?'),
-              const Text(
-                'You can choose multiple services. Each service has its own KG/pieces.',
-                style: TextStyle(color: Colors.black54),
-              ),
+              const Text('You can choose multiple services. Each service has its own KG/pieces.', style: TextStyle(color: Colors.black54)),
               const SizedBox(height: 16),
-
               ...servicesCatalog.map((service) {
                 final selectedQty = ctrl.qtyFor(service.id);
                 final isSelected = selectedQty > 0;
 
                 final qty = isSelected ? selectedQty : service.baseQty;
                 final unit = service.unitType == UnitType.kilo ? 'KG' : 'pc';
-
-                // price estimate per service
                 final tempSelection = ServiceSelection(service: service, qty: qty);
 
                 return Padding(
@@ -59,11 +53,9 @@ class OrderServicesScreen extends ConsumerWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(service.name,
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                                    Text(service.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                                     const SizedBox(height: 2),
-                                    Text('Base: ${service.baseQty} $unit',
-                                        style: const TextStyle(color: Colors.black54)),
+                                    Text('Base: ${service.baseQty} $unit', style: const TextStyle(color: Colors.black54)),
                                   ],
                                 ),
                               ),
@@ -83,8 +75,7 @@ class OrderServicesScreen extends ConsumerWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('₱ ${tempSelection.price}',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                              Text('₱ ${tempSelection.price}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                               KgStepper(
                                 value: qty,
                                 min: service.baseQty,
@@ -96,10 +87,7 @@ class OrderServicesScreen extends ConsumerWidget {
                           if (service.excessPerUnit > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                'Excess: ₱ ${service.excessPerUnit} per extra $unit',
-                                style: const TextStyle(color: Colors.black54),
-                              ),
+                              child: Text('Excess: ₱ ${service.excessPerUnit} per extra $unit', style: const TextStyle(color: Colors.black54)),
                             ),
                         ],
                       ),
@@ -109,8 +97,6 @@ class OrderServicesScreen extends ConsumerWidget {
               }),
             ],
           ),
-
-          // Sticky bottom
           Align(
             alignment: Alignment.bottomCenter,
             child: StickyBottomBar(
@@ -118,7 +104,7 @@ class OrderServicesScreen extends ConsumerWidget {
               subtitle: draft.selections.isEmpty ? 'Select at least 1 service' : 'Estimated: ₱ ${draft.subtotal}',
               buttonText: 'Continue',
               enabled: draft.selections.isNotEmpty,
-              onPressed: () => context.go('/c/order/schedule'),
+              onPressed: () => context.push('/c/order/schedule'),
             ),
           ),
         ],

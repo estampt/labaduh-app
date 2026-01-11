@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/order_models.dart';
 
-final orderDraftProvider =
-    StateNotifierProvider<OrderDraftController, OrderDraft>((ref) {
+final orderDraftProvider = StateNotifierProvider<OrderDraftController, OrderDraft>((ref) {
   return OrderDraftController();
 });
 
@@ -11,17 +10,9 @@ class OrderDraftController extends StateNotifier<OrderDraft> {
 
   void reset() => state = const OrderDraft();
 
-  void setAddressLabel(String label) {
-    state = state.copyWith(addressLabel: label);
-  }
-
-  void setPickupOption(PickupOption option) {
-    state = state.copyWith(pickupOption: option);
-  }
-
-  void setDeliveryOption(DeliveryOption option) {
-    state = state.copyWith(deliveryOption: option);
-  }
+  void setAddressLabel(String label) => state = state.copyWith(addressLabel: label);
+  void setPickupOption(PickupOption option) => state = state.copyWith(pickupOption: option);
+  void setDeliveryOption(DeliveryOption option) => state = state.copyWith(deliveryOption: option);
 
   void setServiceQty(LaundryService service, int qty) {
     final minQty = service.baseQty;
@@ -40,8 +31,7 @@ class OrderDraftController extends StateNotifier<OrderDraft> {
   }
 
   void removeService(String serviceId) {
-    final selections = state.selections.where((s) => s.service.id != serviceId).toList();
-    state = state.copyWith(selections: selections);
+    state = state.copyWith(selections: state.selections.where((s) => s.service.id != serviceId).toList());
   }
 
   int qtyFor(String serviceId) {

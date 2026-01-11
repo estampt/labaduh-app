@@ -42,10 +42,7 @@ class StickyBottomBar extends StatelessWidget {
             const SizedBox(width: 12),
             SizedBox(
               height: 48,
-              child: FilledButton(
-                onPressed: enabled ? onPressed : null,
-                child: Text(buttonText),
-              ),
+              child: FilledButton(onPressed: enabled ? onPressed : null, child: Text(buttonText)),
             ),
           ],
         ),

@@ -21,18 +21,15 @@ class OrderReviewScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             children: [
               const SectionTitle('Services'),
-              ...draft.selections.map((s) {
-                return Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: ListTile(
-                    title: Text(s.service.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text(s.qtyLabel),
-                    trailing: Text('₱ ${s.price}', style: const TextStyle(fontWeight: FontWeight.w900)),
-                  ),
-                );
-              }),
-
+              ...draft.selections.map((s) => Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: ListTile(
+                      title: Text(s.service.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Text(s.qtyLabel),
+                      trailing: Text('₱ ${s.price}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  )),
               const SizedBox(height: 18),
               const SectionTitle('Fees'),
               Card(
@@ -53,7 +50,6 @@ class OrderReviewScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 18),
               const SectionTitle('Pickup details'),
               Card(
@@ -73,7 +69,7 @@ class OrderReviewScreen extends ConsumerWidget {
               title: 'Total: ₱ ${draft.total}',
               subtitle: 'Next: find laundry partner',
               buttonText: 'Confirm & Find',
-              onPressed: () => context.go('/c/order/matching'),
+              onPressed: () => context.push('/c/order/matching'),
             ),
           ),
         ],
@@ -83,11 +79,6 @@ class OrderReviewScreen extends ConsumerWidget {
 
   Widget _line(String left, String right, {bool strong = false}) {
     final style = TextStyle(fontWeight: strong ? FontWeight.w900 : FontWeight.w600);
-    return Row(
-      children: [
-        Expanded(child: Text(left, style: style)),
-        Text(right, style: style),
-      ],
-    );
+    return Row(children: [Expanded(child: Text(left, style: style)), Text(right, style: style)]);
   }
 }

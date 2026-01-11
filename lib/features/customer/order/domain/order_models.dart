@@ -13,18 +13,10 @@ class LaundryService {
 
   final String id;
   final String name;
-
-  /// e.g. 6 KG minimum, or 1 piece for blankets
   final int baseQty;
-
   final UnitType unitType;
-
-  /// price for the baseQty
   final int basePrice;
-
-  /// additional cost per extra unit above baseQty (kilo or piece)
   final int excessPerUnit;
-
   final String? icon;
 }
 
@@ -34,7 +26,7 @@ class ServiceSelection {
   final int qty;
 
   int get price {
-    final excess = (qty - service.baseQty);
+    final excess = qty - service.baseQty;
     final extra = excess > 0 ? excess * service.excessPerUnit : 0;
     return service.basePrice + extra;
   }
@@ -44,6 +36,9 @@ class ServiceSelection {
     return '$qty $unit';
   }
 }
+
+enum PickupOption { asap, tomorrow, scheduled }
+enum DeliveryOption { pickupAndDeliver, walkIn }
 
 class OrderDraft {
   const OrderDraft({
@@ -59,11 +54,8 @@ class OrderDraft {
   final String addressLabel;
 
   int get subtotal => selections.fold<int>(0, (sum, s) => sum + s.price);
-
-  /// Simple placeholder fees (UI-only). Replace later with backend.
   int get deliveryFee => deliveryOption == DeliveryOption.walkIn ? 0 : 49;
   int get serviceFee => subtotal == 0 ? 0 : (subtotal * 0.05).round();
-
   int get total => subtotal + deliveryFee + serviceFee;
 
   OrderDraft copyWith({
@@ -80,6 +72,3 @@ class OrderDraft {
     );
   }
 }
-
-enum PickupOption { asap, tomorrow, scheduled }
-enum DeliveryOption { pickupAndDeliver, walkIn }
