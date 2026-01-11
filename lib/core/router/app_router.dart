@@ -5,6 +5,8 @@ import 'admin_routes.dart';
 import 'auth_signup_routes.dart';
 import 'vendor_approval_routes.dart';
 
+import '../../features/onboarding/presentation/loading_screen_labaduh_lottie.dart';
+
 import '../../features/onboarding/presentation/splash_screen.dart';
 import '../../features/onboarding/presentation/role_select_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -36,7 +38,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
+      //GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
+      
+      GoRoute(path: '/', builder: (context, state) => const LoadingScreenLabaduhLottie()),
+
       GoRoute(path: '/role', builder: (context, state) => const RoleSelectScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
 
