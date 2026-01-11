@@ -26,7 +26,7 @@ class _LoadingScreenLabaduhLottieState extends State<LoadingScreenLabaduhLottie>
       backgroundColor: Colors.black,
       body: Center(
         child: Lottie.asset(
-          'assets/lottie/labaduh_logo.json',
+          'lottie/labaduh_logo.json',
           width: 260,
           repeat: true,
         ),

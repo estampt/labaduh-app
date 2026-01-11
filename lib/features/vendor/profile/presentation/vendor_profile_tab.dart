@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../state/vendor_profile_controller.dart';
-
-class VendorProfileTab extends ConsumerWidget {
+class VendorProfileTab extends StatelessWidget {
   const VendorProfileTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(vendorProfileProvider);
-    final ctrl = ref.read(vendorProfileProvider.notifier);
-
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(title: const Text('Vendor Profile')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
@@ -21,35 +15,10 @@ class VendorProfileTab extends ConsumerWidget {
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.storefront)),
-                title: Text(profile.shopName, style: const TextStyle(fontWeight: FontWeight.w900)),
-                subtitle: Text('${profile.address}\n${profile.openHours}'),
-                isThreeLine: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: SwitchListTile(
-                value: profile.vacationMode,
-                onChanged: ctrl.setVacation,
-                title: const Text('Vacation mode', style: TextStyle(fontWeight: FontWeight.w800)),
-                subtitle: const Text('Pause incoming orders'),
-                secondary: const Icon(Icons.beach_access_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                leading: const Icon(Icons.store_mall_directory_outlined),
-                title: const Text('Shop info'),
-                subtitle: const Text('Hours, address, capacity'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/v/profile/shop'),
+              child: const ListTile(
+                leading: CircleAvatar(child: Icon(Icons.store)),
+                title: Text('Labaduh Laundry Shop (placeholder)'),
+                subtitle: Text('Vendor'),
               ),
             ),
             const SizedBox(height: 12),
@@ -58,8 +27,8 @@ class VendorProfileTab extends ConsumerWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: ListTile(
                 leading: const Icon(Icons.price_change_outlined),
-                title: const Text('Pricing'),
-                subtitle: const Text('System price or your own'),
+                title: const Text('Services & Pricing'),
+                subtitle: const Text('Manage vendor pricing and services'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/v/profile/pricing'),
               ),
@@ -69,9 +38,21 @@ class VendorProfileTab extends ConsumerWidget {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: ListTile(
+                leading: const Icon(Icons.schedule_outlined),
+                title: const Text('Operating hours'),
+                subtitle: const Text('Set your schedule'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/v/profile/hours'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ListTile(
                 leading: const Icon(Icons.settings_outlined),
                 title: const Text('Settings'),
-                subtitle: const Text('Notifications, auto-accept'),
+                subtitle: const Text('Notifications, privacy'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/v/profile/settings'),
               ),
@@ -80,12 +61,10 @@ class VendorProfileTab extends ConsumerWidget {
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                leading: const Icon(Icons.support_agent_outlined),
-                title: const Text('Support'),
-                subtitle: const Text('FAQs and contact'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/v/profile/support'),
+              child: const ListTile(
+                leading: Icon(Icons.logout),
+                title: Text('Logout'),
+                subtitle: Text('Hook to auth later'),
               ),
             ),
           ],

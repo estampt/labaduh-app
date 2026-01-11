@@ -30,7 +30,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/labaduh_loading.png
-    - assets/lottie/loading.json
-    - assets/lottie/labaduh_logo.json
-    - assets/images/labaduh_logo.png
+    - assets/

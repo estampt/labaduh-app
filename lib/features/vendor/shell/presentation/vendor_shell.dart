@@ -5,9 +5,7 @@ class VendorShell extends StatelessWidget {
   const VendorShell({super.key, required this.navigationShell});
   final StatefulNavigationShell navigationShell;
 
-  void _onTap(int index) {
-    navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex);
-  }
+  void _onTap(int index) => navigationShell.goBranch(index);
 
   @override
   Widget build(BuildContext context) {
@@ -17,10 +15,10 @@ class VendorShell extends StatelessWidget {
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: _onTap,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Orders'),
-          NavigationDestination(icon: Icon(Icons.local_laundry_service_outlined), selectedIcon: Icon(Icons.local_laundry_service), label: 'Queue'),
+          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Orders'),
           NavigationDestination(icon: Icon(Icons.payments_outlined), selectedIcon: Icon(Icons.payments), label: 'Earnings'),
-          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Profile'),
+          NavigationDestination(icon: Icon(Icons.store_outlined), selectedIcon: Icon(Icons.store), label: 'Profile'),
         ],
       ),
     );

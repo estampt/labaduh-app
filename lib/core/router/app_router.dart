@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'admin_routes.dart';
 import 'auth_signup_routes.dart';
 import 'vendor_approval_routes.dart';
+import 'vendor_shell_routes.dart';
+import 'vendor_profile_routes.dart';
 
 import '../../features/onboarding/presentation/loading_screen_labaduh_lottie.dart';
 
@@ -111,6 +113,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ...adminRoutes,
       ...authSignupRoutes,
       ...vendorApprovalRoutes,
+      ...vendorShellRoutes,
+      ...vendorProfileRoutes,
 
     ],
   );

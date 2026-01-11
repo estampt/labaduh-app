@@ -11,24 +11,14 @@ class VendorEarningsTab extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Row(
-              children: const [
-                Expanded(child: _StatCard(title: 'Today', value: '₱ 1,820')),
-                SizedBox(width: 10),
-                Expanded(child: _StatCard(title: 'This week', value: '₱ 8,450')),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const _StatCard(title: 'This month', value: '₱ 31,220'),
-            const SizedBox(height: 16),
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: const ListTile(
-                leading: Icon(Icons.account_balance_outlined),
-                title: Text('Payouts'),
-                subtitle: Text('GCash / Bank transfer (placeholder)'),
-                trailing: Icon(Icons.chevron_right),
+                leading: Icon(Icons.payments_outlined),
+                title: Text('Today', style: TextStyle(fontWeight: FontWeight.w900)),
+                trailing: Text('₱ 1,540', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                subtitle: Text('Placeholder — connect to payout ledger later'),
               ),
             ),
             const SizedBox(height: 12),
@@ -36,36 +26,22 @@ class VendorEarningsTab extends StatelessWidget {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: const ListTile(
-                leading: Icon(Icons.receipt_long_outlined),
-                title: Text('Earnings history'),
+                leading: Icon(Icons.account_balance_wallet_outlined),
+                title: Text('Available balance', style: TextStyle(fontWeight: FontWeight.w900)),
+                trailing: Text('₱ 8,900', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                subtitle: Text('Request payout (future)'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const ListTile(
+                leading: Icon(Icons.history),
+                title: Text('Payout history', style: TextStyle(fontWeight: FontWeight.w900)),
                 subtitle: Text('Coming soon'),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.title, required this.value});
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(color: Colors.black54)),
-            const SizedBox(height: 6),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
           ],
         ),
       ),
