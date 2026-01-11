@@ -28,7 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
     setState(() => loading = false);
-    context.go('/home');
+    context.go('/c/home');
   }
 
   @override
