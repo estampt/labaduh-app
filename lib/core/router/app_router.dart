@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../auth/session_notifier.dart';
 import 'admin_routes.dart';
 import 'auth_signup_routes.dart';
 import 'vendor_approval_routes.dart';
@@ -38,7 +39,9 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/',
+    refreshListenable: ref.watch(sessionNotifierProvider),
+    redirect: (context, state) => ref.watch(sessionNotifierProvider).redirect(state),
+    initialLocation: WidgetsBinding.instance.platformDispatcher.defaultRouteName,
     routes: [
       //GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
       

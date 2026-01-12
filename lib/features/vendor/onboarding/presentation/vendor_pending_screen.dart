@@ -1,72 +1,80 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/models/user_role.dart';
-import '../../state/vendor_applications_controller.dart';
+import '../../../auth/state/auth_providers.dart';
 
-class VendorPendingScreen extends ConsumerWidget {
+class VendorPendingScreen extends ConsumerStatefulWidget {
   const VendorPendingScreen({super.key, required this.appId});
   final String appId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final app = ref.watch(vendorApplicationsProvider).where((a) => a.id == appId).firstOrNull;
+  ConsumerState<VendorPendingScreen> createState() => _VendorPendingScreenState();
+}
 
+class _VendorPendingScreenState extends ConsumerState<VendorPendingScreen> {
+  Timer? _timer;
+  String status = 'pending';
+
+  @override
+  void initState() {
+    super.initState();
+    _poll(); // immediate
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) => _poll());
+  }
+
+  Future<void> _poll() async {
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      final approval = await repo.refreshMe();
+      if (!mounted) return;
+      if (approval != null && approval.isNotEmpty) {
+        setState(() => status = approval);
+      }
+
+      if (approval == 'approved') {
+        context.go('/v/home');
+      } else if (approval == 'rejected') {
+        // If you have a rejected route, use it. If not, keep pending UI.
+        context.go('/v/rejected/${widget.appId}');
+      }
+    } catch (_) {
+      // ignore polling errors (offline, etc.)
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Application Status')),
+      appBar: AppBar(title: const Text('Vendor Application')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: app == null
-            ? const Center(child: Text('Application not found'))
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: ListTile(
-                      leading: const Icon(Icons.hourglass_top),
-                      title: Text('${app.shopName}'),
-                      subtitle: Text('Status: ${app.status.label}'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Your application is pending admin approval. You will be able to access Vendor features once approved.',
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                  const Spacer(),
-                  FilledButton.icon(
-                    onPressed: () {
-                      final latest = ref.read(vendorApplicationsProvider).where((a) => a.id == appId).firstOrNull;
-                      if (latest == null) return;
-
-                      if (latest.status == VendorApprovalStatus.approved) {
-                        context.go('/v/home');
-                      } else if (latest.status == VendorApprovalStatus.rejected) {
-                        context.go('/v/rejected?id=$appId');
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Still pending. Please check again later.')),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Check status'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => context.go('/c/home'),
-                    child: const Text('Back to Customer home'),
-                  ),
-                ],
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('Status: $status', style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              const Text('We are reviewing your documents. This page auto-refreshes.'),
+              const SizedBox(height: 20),
+              OutlinedButton(
+                onPressed: _poll,
+                child: const Text('Refresh now'),
               ),
+            ],
+          ),
+        ),
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

@@ -1,22 +1,36 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/auth/data/token_store.dart';
+import '../../features/auth/state/auth_providers.dart';
 
 class ApiClient {
-  ApiClient(this._dio);
-  final Dio _dio;
-
-  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) {
-    return _dio.get<T>(path, queryParameters: query);
+  ApiClient({required String baseUrl, required TokenStore tokenStore})
+      : dio = Dio(BaseOptions(
+          baseUrl: baseUrl,
+          headers: const {'Accept': 'application/json'},
+          connectTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
+        )) {
+    dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        final token = await tokenStore.readToken();
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        handler.next(options);
+      },
+    ));
   }
 
-  Future<Response<T>> post<T>(String path, {Object? body}) {
-    return _dio.post<T>(path, data: body);
-  }
-
-  Future<Response<T>> put<T>(String path, {Object? body}) {
-    return _dio.put<T>(path, data: body);
-  }
-
-  Future<Response<T>> delete<T>(String path) {
-    return _dio.delete<T>(path);
-  }
+  final Dio dio;
 }
+
+/// Provider: adjust baseUrl for emulator/web if needed.
+final apiClientProvider = Provider<ApiClient>((ref) {
+  final tokenStore = ref.watch(tokenStoreProvider);
+  return ApiClient(
+    baseUrl: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000'),
+    tokenStore: tokenStore,
+  );
+});
