@@ -8,6 +8,40 @@ class AuthRepository {
   final ApiClient _api;
   final TokenStore _tokenStore;
 
+  /// ✅ LOGIN (Laravel)
+  /// Expected response: { token, user: { user_type }, vendor?: { id, approval_status } }
+  Future<void> login({
+    required String email,
+    required String password,
+  }) async {
+    final res = await _api.dio.post(
+      '/api/v1/auth/login',
+      data: {
+        'email': email,
+        'password': password,
+      },
+    );
+
+    final data = (res.data as Map).cast<String, dynamic>();
+    final token = (data['token'] ?? '').toString();
+
+    final user = data['user'] is Map ? (data['user'] as Map).cast<String, dynamic>() : <String, dynamic>{};
+    final userType = (user['user_type'] ?? user['type'] ?? '').toString();
+
+    final vendor = data['vendor'];
+    final vendorId = vendor is Map ? (vendor['id']?.toString()) : null;
+    final approval = vendor is Map ? (vendor['approval_status']?.toString()) : null;
+
+    if (token.isNotEmpty) {
+      await _tokenStore.saveSession(
+        token: token,
+        userType: userType.isEmpty ? 'customer' : userType,
+        vendorApprovalStatus: approval,
+        vendorId: vendorId,
+      );
+    }
+  }
+
   Future<void> registerCustomer({
     required String name,
     required String email,
@@ -23,8 +57,8 @@ class AuthRepository {
       },
     );
 
-    final data = res.data as Map<String, dynamic>;
-    final token = (data['token'] ?? '') as String;
+    final data = (res.data as Map).cast<String, dynamic>();
+    final token = (data['token'] ?? '').toString();
     if (token.isNotEmpty) {
       await _tokenStore.saveSession(token: token, userType: 'customer');
     }
@@ -64,12 +98,12 @@ class AuthRepository {
       options: Options(contentType: 'multipart/form-data'),
     );
 
-    final data = res.data as Map<String, dynamic>;
-    final token = (data['token'] ?? '') as String;
+    final data = (res.data as Map).cast<String, dynamic>();
+    final token = (data['token'] ?? '').toString();
 
     final vendor = data['vendor'];
-    final vendorId = vendor is Map<String, dynamic> ? (vendor['id']?.toString()) : null;
-    final approval = vendor is Map<String, dynamic> ? (vendor['approval_status']?.toString()) : null;
+    final vendorId = vendor is Map ? (vendor['id']?.toString()) : null;
+    final approval = vendor is Map ? (vendor['approval_status']?.toString()) : null;
 
     if (token.isNotEmpty) {
       await _tokenStore.saveSession(
@@ -84,17 +118,16 @@ class AuthRepository {
   }
 
   /// Poll current user's vendor approval status using /auth/me.
-  /// Update keys in secure storage for routing/guards.
   Future<String?> refreshMe() async {
     final res = await _api.dio.get('/api/v1/auth/me');
-    final data = res.data as Map<String, dynamic>;
+    final data = (res.data as Map).cast<String, dynamic>();
 
-    final user = data['user'] as Map<String, dynamic>?;
-    final userType = (user?['user_type'] ?? user?['type'] ?? '').toString();
+    final user = data['user'] is Map ? (data['user'] as Map).cast<String, dynamic>() : <String, dynamic>{};
+    final userType = (user['user_type'] ?? user['type'] ?? '').toString();
 
     final vendor = data['vendor'];
-    final approval = vendor is Map<String, dynamic> ? (vendor['approval_status']?.toString()) : null;
-    final vendorId = vendor is Map<String, dynamic> ? (vendor['id']?.toString()) : null;
+    final approval = vendor is Map ? (vendor['approval_status']?.toString()) : null;
+    final vendorId = vendor is Map ? (vendor['id']?.toString()) : null;
 
     // Keep existing token, only refresh metadata.
     final token = await _tokenStore.readToken() ?? '';

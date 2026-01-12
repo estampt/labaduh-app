@@ -22,6 +22,7 @@ dependencies:
   latlong2: any 
   lottie: ^3.1.0
 
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -30,4 +31,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/
+    - assets/lottie/images/labaduh_logo.png

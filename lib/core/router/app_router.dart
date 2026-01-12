@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../auth/session_notifier.dart';
+
 import 'admin_routes.dart';
 import 'auth_signup_routes.dart';
 import 'vendor_approval_routes.dart';
 import 'vendor_shell_routes.dart';
 import 'vendor_profile_routes.dart';
 
-import '../../features/onboarding/presentation/loading_screen_labaduh_lottie.dart';
-
-import '../../features/onboarding/presentation/splash_screen.dart';
+import '../../features/onboarding/presentation/landing_screen.dart';
 import '../../features/onboarding/presentation/role_select_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/signup_screen.dart';
 
 import '../../features/customer/shell/presentation/customer_shell.dart';
 import '../../features/customer/home/presentation/customer_home_tab.dart';
@@ -37,19 +38,35 @@ import '../../features/customer/order/presentation/order_rate_screen.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final session = ref.watch(sessionNotifierProvider);
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    refreshListenable: ref.watch(sessionNotifierProvider),
-    redirect: (context, state) => ref.watch(sessionNotifierProvider).redirect(state),
-    initialLocation: WidgetsBinding.instance.platformDispatcher.defaultRouteName,
-    routes: [
-      //GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
-      
-      GoRoute(path: '/', builder: (context, state) => const LoadingScreenLabaduhLottie()),
 
+    // ✅ Deep link friendly: if user opens /v/home or /c/home directly on web
+    // it won’t always force back to "/".
+    initialLocation: WidgetsBinding.instance.platformDispatcher.defaultRouteName == '/'
+        ? '/'
+        : WidgetsBinding.instance.platformDispatcher.defaultRouteName,
+
+    // ✅ Auto-redirect guard
+    refreshListenable: session,
+    redirect: (context, state) => session.redirect(state),
+
+    routes: [
+      // ✅ Landing page (default when not logged in)
+      GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
+
+      // Optional manual role picker (still accessible)
       GoRoute(path: '/role', builder: (context, state) => const RoleSelectScreen()),
+
+      // Auth screens
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
 
+      // ✅ Ensure /signup exists (even if you also have authSignupRoutes)
+      GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+
+      // CUSTOMER SHELL
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             CustomerShell(navigationShell: navigationShell),
@@ -105,20 +122,49 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/services', builder: (context, state) => const OrderServicesScreen()),
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/schedule', builder: (context, state) => const OrderScheduleScreen()),
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/review', builder: (context, state) => const OrderReviewScreen()),
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/matching', builder: (context, state) => const OrderMatchingScreen()),
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/tracking', builder: (context, state) => const OrderTrackingScreen()),
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/success', builder: (context, state) => const OrderSuccessScreen()),
-      GoRoute(parentNavigatorKey: _rootNavigatorKey, path: '/c/order/rate', builder: (context, state) => const OrderRateScreen()),
-       // ✅ ADD THIS (this registers /a/overview and all admin routes)
+      // Customer order flow (root overlay)
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/services',
+        builder: (context, state) => const OrderServicesScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/schedule',
+        builder: (context, state) => const OrderScheduleScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/review',
+        builder: (context, state) => const OrderReviewScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/matching',
+        builder: (context, state) => const OrderMatchingScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/tracking',
+        builder: (context, state) => const OrderTrackingScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/success',
+        builder: (context, state) => const OrderSuccessScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/c/order/rate',
+        builder: (context, state) => const OrderRateScreen(),
+      ),
+
+      // ✅ Admin + signup extras + vendor modules
       ...adminRoutes,
       ...authSignupRoutes,
       ...vendorApprovalRoutes,
       ...vendorShellRoutes,
       ...vendorProfileRoutes,
-
     ],
   );
 });

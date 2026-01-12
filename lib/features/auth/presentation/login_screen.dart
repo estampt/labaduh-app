@@ -1,68 +1,90 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class LoginScreen extends StatefulWidget {
+import '../../auth/state/auth_providers.dart';
+import '../../../core/auth/session_notifier.dart';
+
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final email = TextEditingController();
-  final password = TextEditingController();
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+
   bool loading = false;
 
   @override
   void dispose() {
-    email.dispose();
-    password.dispose();
+    emailCtrl.dispose();
+    passCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
     setState(() => loading = true);
 
-    // TODO: connect to AuthRepository (Laravel API)
-    await Future.delayed(const Duration(milliseconds: 700));
+    try {
+      final ctrl = ref.read(authControllerProvider.notifier);
 
-    if (!mounted) return;
-    setState(() => loading = false);
-    context.go('/c/home');
+      await ctrl.login(
+        email: emailCtrl.text.trim(),
+        password: passCtrl.text,
+      );
+
+      // 🔑 IMPORTANT: notify router that auth state changed
+      ref.read(sessionNotifierProvider).refresh();
+
+      if (!mounted) return;
+
+      // 🔑 Let router decide where to go (customer / vendor / admin)
+      context.go('/');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Log in')),
+      appBar: AppBar(title: const Text('Login')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
+              controller: emailCtrl,
               decoration: const InputDecoration(labelText: 'Email'),
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: password,
+              controller: passCtrl,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Password'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              height: 48,
               child: FilledButton(
                 onPressed: loading ? null : _login,
                 child: loading
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        height: 20,
+                        width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Continue'),
+                    : const Text('Login'),
               ),
             ),
           ],
