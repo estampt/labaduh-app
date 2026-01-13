@@ -95,7 +95,16 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
+  //Future<void> logout() async {
+  //  await ref.read(tokenStoreProvider).clear();
+  //}
   Future<void> logout() async {
-    await ref.read(tokenStoreProvider).clear();
+    try {
+      //await _api.dio.post('/api/v1/auth/logout'); // optional
+      //TODO: Connect logout API
+    } catch (_) {}
+    await ref.read(authRepositoryProvider).logout();
   }
+
+
 }

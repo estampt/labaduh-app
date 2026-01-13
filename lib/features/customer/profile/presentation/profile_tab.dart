@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class ProfileTab extends StatelessWidget {
+import '../../../../core/auth/logout_helper.dart';
+
+class ProfileTab extends ConsumerWidget {
   const ProfileTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: Padding(
@@ -107,10 +110,16 @@ class ProfileTab extends StatelessWidget {
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: const ListTile(
-                leading: Icon(Icons.logout),
-                title: Text('Logout'),
-                subtitle: Text('Hook to auth later'),
+              child: ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Logout'),
+                subtitle: const Text('Sign out of this device'),
+                onTap: () async {
+                  await performLogout(
+                    ref: ref,
+                    router: GoRouter.of(context),
+                  );
+                },
               ),
             ),
           ],

@@ -141,4 +141,18 @@ class AuthRepository {
     }
     return approval;
   }
+
+  /// ✅ LOGOUT
+  Future<void> logout() async {
+    try {
+      // Optional: call backend logout if available
+      await _api.dio.post('/api/v1/auth/logout');
+    } catch (_) {
+      // ignore API logout errors
+    }
+
+    // Always clear local session
+    await _tokenStore.clear();
+  }
+
 }
