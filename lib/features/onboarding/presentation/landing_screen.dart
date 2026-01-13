@@ -13,19 +13,34 @@ class LandingScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(),
-              const Icon(Icons.local_laundry_service, size: 72),
-              const SizedBox(height: 14),
-              const Text(
-                'Labaduh',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+
+              /// 🔵 BIGGER, CRISP LOGO
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'assets/lottie/images/labaduh_logo.png',
+                    width: 220,          // 👈 control size here
+                    height: 220,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
               ),
-              const SizedBox(height: 8),
+
+              const SizedBox(height: 16),
+
               const Text(
-                'Laundry made easy.\nLogin or create an account to continue.',
+                'Login or create an account to continue.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontSize: 15,
+                ),
               ),
+
               const Spacer(),
+
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -33,7 +48,9 @@ class LandingScreen extends StatelessWidget {
                   child: const Text('Login'),
                 ),
               ),
+
               const SizedBox(height: 10),
+
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -41,11 +58,14 @@ class LandingScreen extends StatelessWidget {
                   child: const Text('Sign up'),
                 ),
               ),
+
               const SizedBox(height: 10),
+
               TextButton(
                 onPressed: () => context.go('/role'),
                 child: const Text('Choose role (optional)'),
               ),
+
               const SizedBox(height: 8),
             ],
           ),
