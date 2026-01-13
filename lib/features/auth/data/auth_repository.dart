@@ -155,4 +155,12 @@ class AuthRepository {
     await _tokenStore.clear();
   }
 
+  Future<void> requestOtp({required String email}) async {
+    await _api.dio.post('/api/v1/auth/request-otp', data: {'email': email});
+  }
+
+  Future<void> verifyOtp({required String email, required String code}) async {
+    await _api.dio.post('/api/v1/auth/verify-otp', data: {'email': email, 'code': code});
+  }
+
 }

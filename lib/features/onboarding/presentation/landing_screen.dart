@@ -28,6 +28,7 @@ class LandingScreen extends StatelessWidget {
                 ),
               ),
 
+              /*
               const SizedBox(height: 16),
 
               const Text(
@@ -38,7 +39,7 @@ class LandingScreen extends StatelessWidget {
                   fontSize: 15,
                 ),
               ),
-
+              */
               const Spacer(),
 
               SizedBox(

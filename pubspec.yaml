@@ -18,8 +18,9 @@ dependencies:
   intl: ^0.19.0
 
   file_picker: ^8.0.0
-  flutter_map: any
-  latlong2: any 
+  flutter_map: ^6.2.1
+  latlong2: ^0.9.1
+  geolocator: ^11.0.0
   lottie: ^3.1.0
 
 

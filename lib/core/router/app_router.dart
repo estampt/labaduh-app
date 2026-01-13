@@ -10,6 +10,7 @@ import 'vendor_approval_routes.dart';
 import 'vendor_shell_routes.dart';
 import 'vendor_profile_routes.dart';
 
+import '../../features/auth/presentation/otp_verify_screen.dart';
 import '../../features/onboarding/presentation/landing_screen.dart';
 import '../../features/onboarding/presentation/role_select_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -158,6 +159,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/c/order/rate',
         builder: (context, state) => const OrderRateScreen(),
       ),
+      // OTP verify screen
+      GoRoute(
+        path: '/otp',
+        builder: (context, state) {
+          final email = (state.uri.queryParameters['email'] ?? '');
+          final next = (state.uri.queryParameters['next'] ?? '/');
+          return OtpVerifyScreen(email: email, next: next);
+        },
+      ),
+
 
       // ✅ Admin + signup extras + vendor modules
       ...adminRoutes,

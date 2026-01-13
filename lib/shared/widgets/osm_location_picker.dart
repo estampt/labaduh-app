@@ -1,36 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 class LocationPickResult {
-  const LocationPickResult({required this.latLng});
+  LocationPickResult({
+    required this.latLng,
+    required this.addressLabel,
+  });
+
   final LatLng latLng;
+  final String addressLabel; // user-entered label (simple + reliable)
 }
 
 class OSMMapLocationPicker extends StatefulWidget {
   const OSMMapLocationPicker({
     super.key,
-    this.initialCenter = const LatLng(14.5995, 120.9842),
-    this.initialZoom = 13,
+    this.initialCenter = const LatLng(14.5995, 120.9842), // Manila default
+    this.initialZoom = 15,
+    this.initialLabel,
   });
 
   final LatLng initialCenter;
   final double initialZoom;
+  final String? initialLabel;
 
   static Future<LocationPickResult?> open(
     BuildContext context, {
-    LatLng initialCenter = const LatLng(14.5995, 120.9842),
-    double initialZoom = 13,
+    LatLng? initialCenter,
+    String? initialLabel,
   }) {
     return showModalBottomSheet<LocationPickResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => FractionallySizedBox(
-        heightFactor: 0.92,
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.88,
         child: OSMMapLocationPicker(
-          initialCenter: initialCenter,
-          initialZoom: initialZoom,
+          initialCenter: initialCenter ?? const LatLng(14.5995, 120.9842),
+          initialLabel: initialLabel,
         ),
       ),
     );
@@ -41,70 +49,142 @@ class OSMMapLocationPicker extends StatefulWidget {
 }
 
 class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
-  late LatLng selected = widget.initialCenter;
+  late final MapController _mapController;
+  late LatLng _picked;
+  late final TextEditingController _labelCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+    _picked = widget.initialCenter;
+    _labelCtrl = TextEditingController(text: widget.initialLabel ?? '');
+  }
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _useGps() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enable Location Services')),
+      );
+      return;
+    }
+
+    LocationPermission perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission denied')),
+      );
+      return;
+    }
+
+    final pos = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    setState(() => _picked = LatLng(pos.latitude, pos.longitude));
+    _mapController.move(_picked, 17);
+  }
+
+  void _confirm() {
+    final label = _labelCtrl.text.trim();
+    if (label.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an address label (e.g., Home, Condo Lobby, etc.)')),
+      );
+      return;
+    }
+    Navigator.of(context).pop(LocationPickResult(latLng: _picked, addressLabel: label));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pick your location'),
+        title: const Text('Pick location'),
         actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(context, LocationPickResult(latLng: selected)),
-            child: const Text('Done'),
-          ),
+          TextButton(onPressed: _confirm, child: const Text('Done')),
         ],
       ),
-      body: FlutterMap(
-        options: MapOptions(
-          initialCenter: widget.initialCenter,
-          initialZoom: widget.initialZoom,
-          onTap: (_, latLng) => setState(() => selected = latLng),
-        ),
+      body: Column(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.labaduh.app',
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _labelCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Address label',
+                      hintText: 'e.g., Home, Office, Lobby',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: _useGps,
+                  icon: const Icon(Icons.my_location),
+                  label: const Text('GPS'),
+                ),
+              ],
+            ),
           ),
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: selected,
-                width: 48,
-                height: 48,
-                child: const Icon(Icons.location_pin, size: 40),
+          Expanded(
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: widget.initialCenter,
+                initialZoom: widget.initialZoom,
+                onTap: (tapPos, latLng) => setState(() => _picked = latLng),
               ),
-            ],
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.labaduh.app',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _picked,
+                      width: 44,
+                      height: 44,
+                      child: const Icon(Icons.location_on, size: 44),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: _CoordPill(latLng: selected),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Lat: ${_picked.latitude.toStringAsFixed(6)}  •  Lng: ${_picked.longitude.toStringAsFixed(6)}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: () => setState(() => _picked = widget.initialCenter),
+                  child: const Text('Reset'),
+                ),
+              ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CoordPill extends StatelessWidget {
-  const _CoordPill({required this.latLng});
-  final LatLng latLng;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      borderRadius: BorderRadius.circular(999),
-      color: Colors.black.withOpacity(0.65),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Text(
-          'Selected: ${latLng.latitude.toStringAsFixed(6)}, '
-          '${latLng.longitude.toStringAsFixed(6)}',
-          style: const TextStyle(color: Colors.white),
-        ),
       ),
     );
   }
