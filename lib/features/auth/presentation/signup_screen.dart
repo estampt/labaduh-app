@@ -21,6 +21,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final nameCtrl = TextEditingController(text: 'Rehnee');
   final emailCtrl = TextEditingController(text: 'rehnee@example.com');
   final mobileCtrl = TextEditingController(text: '09xx xxx xxxx');
+  final addressLine2Ctrl = TextEditingController(); // ADDED: Address Line 2 controller
   final passCtrl = TextEditingController();
 
   // ✅ Address + Location
@@ -34,6 +35,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     nameCtrl.dispose();
     emailCtrl.dispose();
     mobileCtrl.dispose();
+    addressLine2Ctrl.dispose(); // ADDED: Dispose Address Line 2 controller
     passCtrl.dispose();
     super.dispose();
   }
@@ -86,6 +88,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           name: nameCtrl.text.trim(),
           email: emailCtrl.text.trim(),
           password: passCtrl.text,
+          // ADDED: Include address line 2 in registration
+          addressLine2: addressLine2Ctrl.text.trim(), // Optional field
         );
 
         // ✅ Optional: request OTP (make sure AuthRepository has requestOtp)
@@ -116,6 +120,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             'mobile': mobileCtrl.text.trim(),
             'password': passCtrl.text,
             'address_label': pickedAddressLabel,
+            'address_line2': addressLine2Ctrl.text.trim(), // ADDED: Include address line 2
             'lat': pickedLatLng!.latitude,
             'lng': pickedLatLng!.longitude,
           },
@@ -181,13 +186,60 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
             const SizedBox(height: 12),
 
+            TextField(
+              controller: nameCtrl, 
+              decoration: const InputDecoration(
+                labelText: 'Full name',
+                border: OutlineInputBorder(),
+              )
+            ),
+            
+            const SizedBox(height: 12),
+            
+            TextField(
+              controller: emailCtrl, 
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              )
+            ),
+            
+            const SizedBox(height: 12),
+            
+            TextField(
+              controller: mobileCtrl, 
+              decoration: const InputDecoration(
+                labelText: 'Mobile',
+                border: OutlineInputBorder(),
+              )
+            ),
+            
+           
+            
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+
             // ✅ ADDRESS + OSM MAP PICKER
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: ListTile(
                 leading: const Icon(Icons.map_outlined),
-                title: Text(pickedAddressLabel ?? 'Set your address'),
+                title: Text(
+                  pickedAddressLabel ?? 'Set your address',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(locSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: loading ? null : _pickLocation,
@@ -196,35 +248,43 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
             const SizedBox(height: 12),
 
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full name')),
-            const SizedBox(height: 10),
-            TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
-            const SizedBox(height: 10),
-            TextField(controller: mobileCtrl, decoration: const InputDecoration(labelText: 'Mobile')),
-            const SizedBox(height: 10),
+            // ADDED: Address Line 2 Input Field
             TextField(
-              controller: passCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
+              controller: addressLine2Ctrl,
+              enabled: !loading,
+              decoration: const InputDecoration(
+                labelText: 'Address Line 2 (Optional)',
+                hintText: 'Unit, Building, Suite, Floor, etc.',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              maxLines: 2,
+              minLines: 1,
+            ),
+            const SizedBox(height: 20),
+
+            FilledButton(
+              onPressed: loading ? null : _submit,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: loading
+                  ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Create Account',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
             ),
 
             const SizedBox(height: 16),
 
-            FilledButton(
-              onPressed: loading ? null : _submit,
-              child: loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Create account'),
-            ),
-
-            const SizedBox(height: 10),
-
             TextButton(
-              onPressed: () => context.go('/login'),
+              onPressed: loading ? null : () => context.go('/login'),
               child: const Text('Already have an account? Login'),
             ),
           ],

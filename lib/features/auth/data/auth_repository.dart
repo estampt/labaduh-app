@@ -46,6 +46,12 @@ class AuthRepository {
     required String name,
     required String email,
     required String password,
+    String? phone,
+    String? addressLine1,
+    String? addressLine2,
+    String? countryISO,
+    double? latitude,
+    double? longitude,
   }) async {
     final res = await _api.dio.post(
       '/api/v1/auth/register',
@@ -54,6 +60,12 @@ class AuthRepository {
         'email': email,
         'password': password,
         'user_type': 'customer',
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (addressLine1 != null && addressLine1.isNotEmpty) 'address_line1': addressLine1,
+        if (addressLine2 != null && addressLine2.isNotEmpty) 'address_line2': addressLine2,
+        if (countryISO != null && countryISO.isNotEmpty) 'country_iso': countryISO,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       },
     );
 
@@ -75,6 +87,10 @@ class AuthRepository {
     required String businessRegistrationPath,
     required String governmentIdPath,
     List<String> supportingDocPaths = const [],
+    String? phone,
+    String? addressLine1,
+    String? addressLine2,
+    String? countryISO,
   }) async {
     final form = FormData.fromMap({
       'name': name,
@@ -84,6 +100,10 @@ class AuthRepository {
       'business_name': businessName,
       'latitude': latitude,
       'longitude': longitude,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      if (addressLine1 != null && addressLine1.isNotEmpty) 'address_line1': addressLine1,
+      if (addressLine2 != null && addressLine2.isNotEmpty) 'address_line2': addressLine2,
+      if (countryISO != null && countryISO.isNotEmpty) 'country_iso': countryISO,
       'business_registration': await MultipartFile.fromFile(businessRegistrationPath),
       'government_id': await MultipartFile.fromFile(governmentIdPath),
       if (supportingDocPaths.isNotEmpty)
@@ -162,5 +182,4 @@ class AuthRepository {
   Future<void> verifyOtp({required String email, required String code}) async {
     await _api.dio.post('/api/v1/auth/verify-otp', data: {'email': email, 'code': code});
   }
-
 }

@@ -48,6 +48,12 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     required String name,
     required String email,
     required String password,
+    String? phone,
+    String? addressLine1,
+    String? addressLine2,
+    String? countryISO,
+    double? latitude,
+    double? longitude,
   }) async {
     state = const AsyncLoading();
     try {
@@ -55,6 +61,12 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
             name: name,
             email: email,
             password: password,
+            phone: phone,
+            addressLine1: addressLine1,
+            addressLine2: addressLine2,
+            countryISO: countryISO,
+            latitude: latitude,
+            longitude: longitude,
           );
       state = const AsyncData(null);
     } catch (e, st) {
@@ -73,6 +85,10 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     required String businessRegistrationPath,
     required String governmentIdPath,
     List<String> supportingDocPaths = const [],
+    String? phone,
+    String? addressLine1,
+    String? addressLine2,
+    String? countryISO,
   }) async {
     state = const AsyncLoading();
     try {
@@ -86,6 +102,10 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
             businessRegistrationPath: businessRegistrationPath,
             governmentIdPath: governmentIdPath,
             supportingDocPaths: supportingDocPaths,
+            phone: phone,
+            addressLine1: addressLine1,
+            addressLine2: addressLine2,
+            countryISO: countryISO,
           );
       state = const AsyncData(null);
       return vendorId;
@@ -95,9 +115,6 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  //Future<void> logout() async {
-  //  await ref.read(tokenStoreProvider).clear();
-  //}
   Future<void> logout() async {
     try {
       //await _api.dio.post('/api/v1/auth/logout'); // optional
@@ -105,6 +122,4 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     } catch (_) {}
     await ref.read(authRepositoryProvider).logout();
   }
-
-
 }
