@@ -60,7 +60,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     // Basic validation
     if (nameCtrl.text.trim().isEmpty ||
         emailCtrl.text.trim().isEmpty ||
-        passCtrl.text.isEmpty) {
+        passCtrl.text.isEmpty ||
+        addressLine2Ctrl.text.trim().isEmpty) { // UPDATED: Added addressLine2 validation
       if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +90,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           email: emailCtrl.text.trim(),
           password: passCtrl.text,
           // ADDED: Include address line 2 in registration
-          addressLine2: addressLine2Ctrl.text.trim(), // Optional field
+          addressLine2: addressLine2Ctrl.text.trim(), // Now mandatory field
         );
 
         // ✅ Optional: request OTP (make sure AuthRepository has requestOtp)
@@ -215,7 +216,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             
            
-            
             const SizedBox(height: 12),
 
             TextField(
@@ -245,15 +245,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 onTap: loading ? null : _pickLocation,
               ),
             ),
-
+            
             const SizedBox(height: 12),
 
-            // ADDED: Address Line 2 Input Field
+            // UPDATED: Address Line 2 Input Field - Now Mandatory
             TextField(
               controller: addressLine2Ctrl,
               enabled: !loading,
               decoration: const InputDecoration(
-                labelText: 'Address Line 2 (Optional)',
+                labelText: 'Address Line 2', // UPDATED: Removed "(Optional)"
                 hintText: 'Unit, Building, Suite, Floor, etc.',
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),

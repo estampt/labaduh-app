@@ -181,6 +181,7 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
 
   Future<void> _confirm() async {
     final label = _labelCtrl.text.trim();
+    /*
     if (label.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -191,7 +192,7 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
       );
       return;
     }
-
+    */
     // Best-effort: if exact address is still empty, try to reverse-geocode once
     // before returning.
     if (_exactAddress.trim().isEmpty) {
@@ -384,6 +385,13 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
                           ),
                   ),
                 ),
+                const SizedBox(width: 10),
+                    FilledButton.icon(
+                      onPressed: _useGps,
+                      icon: const Icon(Icons.my_location),
+                      label: const Text('GPS'),
+                    ),
+
                 if (_results.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Material(
@@ -410,29 +418,8 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
                       },
                     ),
                   ),
-                ],
-                const SizedBox(height: 10),
-
-                // 🏷️ Label + GPS
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _labelCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Address label',
-                          hintText: 'e.g., Home, Office, Lobby',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    FilledButton.icon(
-                      onPressed: _useGps,
-                      icon: const Icon(Icons.my_location),
-                      label: const Text('GPS'),
-                    ),
-                  ],
-                ),
+                ], 
+                
               ],
             ),
           ),
