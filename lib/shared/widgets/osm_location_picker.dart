@@ -385,13 +385,13 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
                           ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                /*const SizedBox(width: 10),
                     FilledButton.icon(
                       onPressed: _useGps,
                       icon: const Icon(Icons.my_location),
                       label: const Text('GPS'),
                     ),
-
+                    */
                 if (_results.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Material(
