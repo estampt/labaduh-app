@@ -39,6 +39,8 @@ class SessionNotifier extends ChangeNotifier {
     final isPublic = loc == '/' ||
         loc.startsWith('/login') ||
         loc.startsWith('/signup') ||
+        loc.startsWith('/otp') ||
+        loc.startsWith('/v/apply') ||
         loc.startsWith('/role');
 
     if (!_initialized) return null;

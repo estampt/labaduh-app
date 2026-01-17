@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../auth/state/auth_providers.dart';
@@ -19,23 +20,39 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   UserRole role = UserRole.customer;
 
   final nameCtrl = TextEditingController(text: 'Rehnee');
-  final emailCtrl = TextEditingController(text: 'rehnee@example.com');
-  final mobileCtrl = TextEditingController(text: '09xx xxx xxxx');
-  final addressLine2Ctrl = TextEditingController(); // ADDED: Address Line 2 controller
+  final emailCtrl = TextEditingController(text: 'rehneesoriano@gmail.com');
+  final addressLine2Ctrl = TextEditingController();
   final passCtrl = TextEditingController();
 
+  // Phone number variables
+  final phoneNumberCtrl = TextEditingController();
+  PhoneNumber phoneNumber = PhoneNumber(isoCode: 'PH');
+  String initialCountry = 'PH';
+  bool isPhoneValid = false;
+
   // ✅ Address + Location
-  String? pickedAddressLabel;
+  String? addressLine1;
   LatLng? pickedLatLng;
 
   bool loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Initialize phone number for Philippines
+    phoneNumber = PhoneNumber(
+      isoCode: 'PH',
+      dialCode: '+63',
+      phoneNumber: '',
+    );
+  }
+
+  @override
   void dispose() {
     nameCtrl.dispose();
     emailCtrl.dispose();
-    mobileCtrl.dispose();
-    addressLine2Ctrl.dispose(); // ADDED: Dispose Address Line 2 controller
+    phoneNumberCtrl.dispose();
+    addressLine2Ctrl.dispose();
     passCtrl.dispose();
     super.dispose();
   }
@@ -43,25 +60,27 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Future<void> _pickLocation() async {
     final res = await OSMMapLocationPicker.open(
       context,
-      initialCenter: pickedLatLng, // uses previous selection if any
-      initialLabel: pickedAddressLabel,
+      initialCenter: pickedLatLng,
+      initialLabel: addressLine1,
     );
     if (!mounted || res == null) return;
 
     setState(() {
       pickedLatLng = res.latLng;
-      pickedAddressLabel = res.addressLabel;
+      addressLine1 = res.addressLabel;
     });
   }
 
   Future<void> _submit() async {
     setState(() => loading = true);
 
+    final countryISO = (phoneNumber.isoCode ?? '').trim().toUpperCase(); // e.g. "SG"
+  
     // Basic validation
     if (nameCtrl.text.trim().isEmpty ||
         emailCtrl.text.trim().isEmpty ||
         passCtrl.text.isEmpty ||
-        addressLine2Ctrl.text.trim().isEmpty) { // UPDATED: Added addressLine2 validation
+        addressLine2Ctrl.text.trim().isEmpty) {
       if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,8 +89,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       return;
     }
 
+    // Phone number validation
+    if (!isPhoneValid || phoneNumber.phoneNumber == null || phoneNumber.phoneNumber!.isEmpty) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid phone number')),
+      );
+      return;
+    }
+
     // ✅ Location required for BOTH roles
-    if (pickedLatLng == null || (pickedAddressLabel ?? '').trim().isEmpty) {
+    if (pickedLatLng == null || (addressLine1 ?? '').trim().isEmpty) {
       if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -83,31 +112,52 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     try {
       final ctrl = ref.read(authControllerProvider.notifier);
 
+      // Get full phone number with country code 
+      String? fullPhoneNumber;
+      if (phoneNumber.dialCode != null && phoneNumber.phoneNumber != null) {
+        final dialCode = phoneNumber.dialCode!;
+        final phoneNum = phoneNumber.phoneNumber!;
+        
+        // Remove the dial code from the beginning if it exists
+        final numberWithoutDialCode = phoneNum.startsWith(dialCode)
+            ? phoneNum.substring(dialCode.length)
+            : phoneNum.replaceAll(RegExp(r'[^\d]+'), '');
+        
+        fullPhoneNumber = dialCode + numberWithoutDialCode;
+      }
+
+       
       if (role == UserRole.customer) {
-        // ✅ Register customer (you can extend repository later to accept lat/lng/address)
+        // ✅ Register customer WITHOUT mobile parameter if not supported
+        // Check if registerCustomer accepts mobile parameter
         await ctrl.registerCustomer(
           name: nameCtrl.text.trim(),
           email: emailCtrl.text.trim(),
           password: passCtrl.text,
-          // ADDED: Include address line 2 in registration
-          addressLine2: addressLine2Ctrl.text.trim(), // Now mandatory field
+          
+          // phone number INCLUDING country code (e.g. +639171234567)
+          phone: fullPhoneNumber,
+
+          // the human-readable label from the map picker
+          addressLine1: addressLine1!.trim(),
+
+          // coordinates from the map picker
+          latitude: pickedLatLng!.latitude,
+          longitude: pickedLatLng!.longitude,
+
+          // unit / building / floor, etc.
+          addressLine2: addressLine2Ctrl.text.trim(),
+
+          countryISO: countryISO.isEmpty ? null : countryISO,
         );
-
-        // ✅ Optional: request OTP (make sure AuthRepository has requestOtp)
-        // If you don't have it yet, comment this block.
-        await ref.read(authRepositoryProvider).requestOtp(
-              email: emailCtrl.text.trim(),
-            );
-
-        // IMPORTANT: tell router to re-check session
-        ref.read(sessionNotifierProvider).refresh();
-
+ 
         if (!mounted) return;
-
-        // ✅ Go to OTP screen first, then OTP screen will redirect to /c/home
         final email = Uri.encodeComponent(emailCtrl.text.trim());
         final next = Uri.encodeComponent('/c/home');
         context.go('/otp?email=$email&next=$next');
+        // Debug: print all values
+        print('=== SUCCESS ===');
+         
       } else {
         // ✅ Vendor still goes to /v/apply (vendor onboarding/documents)
         // Forward the location + address so /v/apply can prefill.
@@ -118,10 +168,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           extra: {
             'name': nameCtrl.text.trim(),
             'email': emailCtrl.text.trim(),
-            'mobile': mobileCtrl.text.trim(),
+            'mobile': fullPhoneNumber,
+            'country_code': phoneNumber.dialCode,
+            'iso_code': phoneNumber.isoCode,
             'password': passCtrl.text,
-            'address_label': pickedAddressLabel,
-            'address_line2': addressLine2Ctrl.text.trim(), // ADDED: Include address line 2
+            'address_label': addressLine1,
+            'address_line2': addressLine2Ctrl.text.trim(),
             'lat': pickedLatLng!.latitude,
             'lng': pickedLatLng!.longitude,
           },
@@ -189,6 +241,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
             TextField(
               controller: nameCtrl, 
+              enabled: !loading,
               decoration: const InputDecoration(
                 labelText: 'Full name',
                 border: OutlineInputBorder(),
@@ -199,6 +252,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             
             TextField(
               controller: emailCtrl, 
+              enabled: !loading,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
@@ -207,19 +261,60 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             
             const SizedBox(height: 12),
             
-            TextField(
-              controller: mobileCtrl, 
-              decoration: const InputDecoration(
-                labelText: 'Mobile',
-                border: OutlineInputBorder(),
-              )
+            // UPDATED: Using intl_phone_number_input
+            InternationalPhoneNumberInput(
+              onInputChanged: (PhoneNumber number) {
+                setState(() {
+                  phoneNumber = number;
+                });
+              },
+              onInputValidated: (bool value) {
+                setState(() {
+                  isPhoneValid = value;
+                });
+              },
+              selectorConfig: const SelectorConfig(
+                selectorType: PhoneInputSelectorType.DROPDOWN,
+                showFlags: true,
+                useEmoji: true,
+                trailingSpace: false,
+              ),
+              ignoreBlank: false,
+              autoValidateMode: AutovalidateMode.disabled,
+              selectorTextStyle: const TextStyle(color: Colors.black),
+              initialValue: phoneNumber,
+              textFieldController: phoneNumberCtrl,
+              formatInput: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                signed: true,
+                decimal: true,
+              ),
+              inputDecoration: InputDecoration(
+                labelText: 'Phone Number',
+                border: const OutlineInputBorder(),
+                errorBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: isPhoneValid ? Colors.grey : Colors.red,
+                  ),
+                ),
+                enabled: !loading,
+              ),
+              searchBoxDecoration: InputDecoration(
+                hintText: 'Search country...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onSaved: (PhoneNumber number) {
+                // Handle when form is saved
+              },
             ),
             
-           
             const SizedBox(height: 12),
 
             TextField(
               controller: passCtrl,
+              enabled: !loading,
               obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Password',
@@ -236,7 +331,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               child: ListTile(
                 leading: const Icon(Icons.map_outlined),
                 title: Text(
-                  pickedAddressLabel ?? 'Set your address',
+                  addressLine1 ?? 'Set your address',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -253,7 +348,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               controller: addressLine2Ctrl,
               enabled: !loading,
               decoration: const InputDecoration(
-                labelText: 'Address Line 2', // UPDATED: Removed "(Optional)"
+                labelText: 'Address Line 2',
                 hintText: 'Unit, Building, Suite, Floor, etc.',
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),

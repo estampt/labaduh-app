@@ -1,3 +1,4 @@
+import 'dart:convert'; // ADD THIS IMPORT
 import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
@@ -42,7 +43,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> registerCustomer({
+  Future<Map<String, dynamic>> registerCustomer({
     required String name,
     required String email,
     required String password,
@@ -53,27 +54,225 @@ class AuthRepository {
     double? latitude,
     double? longitude,
   }) async {
-    final res = await _api.dio.post(
-      '/api/v1/auth/register',
-      data: {
+    
+    print('🚀 Starting registerCustomer...');
+    
+    try {
+      // Prepare the request data
+      final requestData = {
         'name': name,
         'email': email,
         'password': password,
-        'user_type': 'customer',
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (addressLine1 != null && addressLine1.isNotEmpty) 'address_line1': addressLine1,
-        if (addressLine2 != null && addressLine2.isNotEmpty) 'address_line2': addressLine2,
-        if (countryISO != null && countryISO.isNotEmpty) 'country_iso': countryISO,
+        'role': 'customer',
+        if (phone != null && phone.isNotEmpty) 'contact_number': phone,
+        if (addressLine1 != null && addressLine1.isNotEmpty)
+          'address_line1': addressLine1,
+        if (addressLine2 != null && addressLine2.isNotEmpty)
+          'address_line2': addressLine2,
+        if (countryISO != null && countryISO.isNotEmpty) 'country_ISO': countryISO,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
-      },
-    );
-
-    final data = (res.data as Map).cast<String, dynamic>();
-    final token = (data['token'] ?? '').toString();
-    if (token.isNotEmpty) {
-      await _tokenStore.saveSession(token: token, userType: 'customer');
+      };
+      
+      print('📤 Sending POST to /api/v1/auth/register');
+      print('📦 Request data: ${JsonEncoder.withIndent('  ').convert(requestData)}');
+      
+      final res = await _api.dio.post(
+        '/api/v1/auth/register',
+        data: requestData,
+        options: Options(
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          // Important: Don't throw on any status
+          validateStatus: (status) => true,
+          responseType: ResponseType.plain, // Try plain first to see raw response
+        ),
+      );
+      
+      print('📥 Raw response received:');
+      print('  Status: ${res.statusCode}');
+      print('  Headers: ${res.headers}');
+      print('  Data type: ${res.data.runtimeType}');
+      print('  Raw data: ${res.data}');
+      
+      // Handle 201 Created
+      if (res.statusCode == 201) {
+        print('✅ Server returned 201 (Created)');
+        
+        Map<String, dynamic> responseData;
+        
+        // Try to parse the response
+        try {
+          if (res.data is String) {
+            final stringData = res.data as String;
+            print('  Response is String, trying to parse as JSON...');
+            
+            if (stringData.trim().isEmpty) {
+              print('  Response is empty string');
+              responseData = {'message': 'Registration successful'};
+            } else if (stringData.trim().startsWith('{') && stringData.trim().endsWith('}')) {
+              // It's JSON
+              responseData = jsonDecode(stringData) as Map<String, dynamic>;
+              print('  Successfully parsed JSON: $responseData');
+            } else {
+              // Not JSON
+              print('  Response is not JSON: $stringData');
+              responseData = {'raw_response': stringData};
+            }
+          } else if (res.data is Map) {
+            // Already a Map
+            responseData = Map<String, dynamic>.from(res.data as Map);
+            print('  Response is already Map: $responseData');
+          } else {
+            // Unknown type
+            print('  Unknown response type: ${res.data.runtimeType}');
+            responseData = {'data': res.data.toString()};
+          }
+        } catch (parseError) {
+          print('  ❌ Failed to parse response: $parseError');
+          responseData = {
+            'message': 'Registration successful',
+            'raw_data': res.data.toString(),
+            'parse_error': parseError.toString(),
+          };
+        }
+        
+        // Try to extract token from various locations
+        String? token;
+        
+        // Check common token locations
+        token = responseData['token'] as String?;
+          
+        print('  Token found: ${token != null ? "YES" : "NO"}');
+        if (token != null) {
+          print('  Token: ${token.length > 30 ? "${token.substring(0, 30)}..." : token}');
+          await _tokenStore.saveSession(token: token, userType: 'customer');
+          print('  ✅ Session saved with token');
+        } else {
+          print('  ⚠️ No token in response. Checking response structure:');
+          print('  Response keys: ${responseData.keys}');
+          
+          // Maybe token is in a different format or not needed
+          // Some APIs don't return token on registration, require email verification first
+          print('  ℹ️ No token returned. User may need to verify email first.');
+        }
+        
+        return responseData;
+      }
+      // Handle other success statuses
+      else if (res.statusCode! >= 200 && res.statusCode! < 300) {
+        print('✅ Server returned ${res.statusCode} (Success)');
+        
+        // Similar parsing as above...
+        Map<String, dynamic> responseData;
+        try {
+          responseData = _parseResponse(res.data);
+        } catch (e) {
+          responseData = {'status': 'success', 'code': res.statusCode};
+        }
+        
+        // Try to get token
+        final token = _extractToken(responseData, res.headers);
+        if (token != null) {
+          await _tokenStore.saveSession(token: token, userType: 'customer');
+        }
+        
+        return responseData;
+      }
+      // Handle error statuses
+      else {
+        print('❌ Server returned error ${res.statusCode}');
+        
+        // Try to parse error response
+        Map<String, dynamic> errorData;
+        try {
+          errorData = _parseResponse(res.data);
+        } catch (e) {
+          errorData = {
+            'message': 'Request failed with status ${res.statusCode}',
+            'raw_response': res.data.toString(),
+          };
+        }
+        
+        // Throw DioException with the parsed error
+        throw DioException(
+          requestOptions: res.requestOptions,
+          response: res,
+          type: DioExceptionType.badResponse,
+          error: errorData['message'] ?? 'Registration failed',
+        );
+      }
+    } 
+    catch (e, stackTrace) {
+      print('🔥 CRITICAL ERROR in registerCustomer:');
+      print('  Type: ${e.runtimeType}');
+      print('  Error: $e');
+      print('  Stack trace: $stackTrace');
+      
+      // Check if it's a DioException with more details
+      if (e is DioException) {
+        print('  DioError details:');
+        print('    Type: ${e.type}');
+        print('    Message: ${e.message}');
+        print('    Error: ${e.error}');
+        print('    Response status: ${e.response?.statusCode}');
+        print('    Response data: ${e.response?.data}');
+        print('    Response headers: ${e.response?.headers}');
+      }
+      
+      rethrow;
     }
+  }
+
+  // Helper method to parse response
+  Map<String, dynamic> _parseResponse(dynamic data) {
+    try {
+      if (data is Map) {
+        return Map<String, dynamic>.from(data);
+      } else if (data is String) {
+        final trimmed = data.trim();
+        if (trimmed.isEmpty) {
+          return {'message': 'Empty response'};
+        } else if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          return jsonDecode(trimmed) as Map<String, dynamic>;
+        } else if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          return {'data': jsonDecode(trimmed)};
+        } else {
+          return {'raw_response': trimmed};
+        }
+      } else {
+        return {'data': data.toString()};
+      }
+    } catch (e) {
+      return {
+        'parse_error': e.toString(),
+        'raw_data': data.toString(),
+      };
+    }
+  }
+
+  // Helper method to extract token
+  String? _extractToken(Map<String, dynamic> data, Headers headers) {
+    // Check data map
+    String? token;
+    token = data['token'] as String?;
+    token ??= data['access_token'] as String?;
+    token ??= data['data']?['token'] as String?;
+    token ??= data['auth_token'] as String?;
+    token ??= data['accessToken'] as String?;
+    token ??= data['authToken'] as String?;
+    token ??= data['user']?['token'] as String?;
+    token ??= data['auth']?['token'] as String?;
+    
+    // Check headers
+    token ??= headers.value('authorization')?.replaceFirst('Bearer ', '');
+    token ??= headers.value('Authorization')?.replaceFirst('Bearer ', '');
+    token ??= headers.value('X-Auth-Token') as String?;
+    token ??= headers.value('x-auth-token') as String?;
+    
+    return token;
   }
 
   /// Returns vendor id if present (used for /v/pending/:id routing).
@@ -176,10 +375,58 @@ class AuthRepository {
   }
 
   Future<void> requestOtp({required String email}) async {
-    await _api.dio.post('/api/v1/auth/request-otp', data: {'email': email});
+    await _api.dio.post('/api/v1/auth/send-email-otp', data: {'email': email});
   }
 
   Future<void> verifyOtp({required String email, required String code}) async {
-    await _api.dio.post('/api/v1/auth/verify-otp', data: {'email': email, 'code': code});
+    //await _api.dio.post('/api/v1/auth/verify-email-otp', data: {'email': email, 'code': code});
+
+    final requestData = {
+        'otp': code,
+        'email': email,
+        
+      };
+      
+      print('📤 Sending POST to /api/v1/auth/verify-email-otp');
+      print('📦 Request data: ${JsonEncoder.withIndent('  ').convert(requestData)}');
+      
+      final res = await _api.dio.post(
+        '/api/v1/auth/verify-email-otp',
+        data: requestData,
+        options: Options(
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          // Important: Don't throw on any status
+          validateStatus: (status) => true,
+          responseType: ResponseType.plain, // Try plain first to see raw response
+        ),
+      );
+ 
+      if (res.statusCode! >= 400) { 
+        
+        print('❌ Server returned error ${res.statusCode}');
+        
+        // Try to parse error response
+        Map<String, dynamic> errorData;
+        try {
+          errorData = _parseResponse(res.data);
+        } catch (e) {
+          errorData = {
+            'message': 'Request failed with status ${res.statusCode}',
+            'raw_response': res.data.toString(),
+          };
+        }
+        
+        // Throw DioException with the parsed error
+        throw DioException(
+          requestOptions: res.requestOptions,
+          response: res,
+          type: DioExceptionType.badResponse,
+          error: errorData['message'] ?? 'Registration failed',
+        );
+      }
+      
   }
 }

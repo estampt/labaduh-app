@@ -195,6 +195,8 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
     */
     // Best-effort: if exact address is still empty, try to reverse-geocode once
     // before returning.
+
+
     if (_exactAddress.trim().isEmpty) {
       await _updateExactAddressFor(_picked);
     }
@@ -330,6 +332,10 @@ class _OSMMapLocationPickerState extends State<OSMMapLocationPicker> {
 
     _searchFocus.unfocus();
     _mapController.move(_picked, 17);
+    
+    //TODO: Update later if to select address and auto close the picker
+    // Call the confirm function automatically after selection
+    //_confirm();
   }
 
   @override
