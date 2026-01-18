@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../shared/widgets/document_upload_tile.dart'; // ✅ add this import
 import '../../../core/network/api_client.dart';
 import '../data/token_store.dart';
 import '../data/auth_repository.dart';
@@ -83,9 +84,9 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     required String businessName,
     required double latitude,
     required double longitude,
-    required String businessRegistrationPath,
-    required String governmentIdPath,
-    List<String> supportingDocPaths = const [],
+    required DocumentAttachment businessRegistration,
+    required DocumentAttachment governmentId,
+    List<DocumentAttachment> supportingDocs = const [],
     String? phone,
     String? addressLine1,
     String? addressLine2,
@@ -93,21 +94,26 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   }) async {
     state = const AsyncLoading();
     try {
-      final vendorId = await ref.read(authRepositoryProvider).registerVendorMultipart(
-            name: name,
-            email: email,
-            password: password,
-            businessName: businessName,
-            latitude: latitude,
-            longitude: longitude,
-            businessRegistrationPath: businessRegistrationPath,
-            governmentIdPath: governmentIdPath,
-            supportingDocPaths: supportingDocPaths,
-            phone: phone,
-            addressLine1: addressLine1,
-            addressLine2: addressLine2,
-            countryISO: countryISO,
-          );
+      final data = await ref.read(authRepositoryProvider).registerVendorMultipart(
+        name: name,
+        email: email,
+        password: password,
+        businessName: businessName,
+        latitude: latitude,
+        longitude: longitude,
+        businessRegistration: businessRegistration,
+        governmentId: governmentId,
+        supportingDocs: supportingDocs,
+        phone: phone,
+        addressLine1: addressLine1,
+        addressLine2: addressLine2,
+        countryISO: countryISO,
+      );
+
+      // ✅ Extract vendor id safely
+      final vendor = data['vendor'];
+      final vendorId = vendor is Map ? vendor['id']?.toString() : null;
+
       state = const AsyncData(null);
       return vendorId;
     } catch (e, st) {
@@ -115,6 +121,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       rethrow;
     }
   }
+
 
   Future<void> logout() async {
     try {

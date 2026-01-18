@@ -51,7 +51,7 @@ class SessionNotifier extends ChangeNotifier {
     if (!hasToken) {
       if (isPublic) return null;
       return '/';
-    }
+    } 
 
     // Logged in: don't stay on landing/login/signup/role.
     if (isPublic) {

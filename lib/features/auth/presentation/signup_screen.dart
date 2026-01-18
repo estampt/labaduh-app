@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; 
 
+import '../../../../shared/widgets/document_upload_tile.dart';
 import '../../auth/state/auth_providers.dart';
 import '../../../core/models/user_role.dart';
-import '../../../core/auth/session_notifier.dart';
 import '../../../shared/widgets/osm_location_picker.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
@@ -21,25 +23,38 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   final nameCtrl = TextEditingController(text: 'Rehnee');
   final emailCtrl = TextEditingController(text: 'rehneesoriano@gmail.com');
-  final addressLine2Ctrl = TextEditingController();
+  final addressLine2Ctrl = TextEditingController(text: '15HI');
   final passCtrl = TextEditingController();
 
+  // ✅ Vendor-only fields
+  final businessNameCtrl = TextEditingController(text: 'Labaduh');
+
   // Phone number variables
-  final phoneNumberCtrl = TextEditingController();
+  final phoneNumberCtrl = TextEditingController(text :'910 123 1231');
   PhoneNumber phoneNumber = PhoneNumber(isoCode: 'PH');
-  String initialCountry = 'PH';
   bool isPhoneValid = false;
 
   // ✅ Address + Location
   String? addressLine1;
   LatLng? pickedLatLng;
 
+  // Required docs
+  DocumentAttachment businessReg =
+      DocumentAttachment.empty('Business Registration');
+  DocumentAttachment governmentId =
+      DocumentAttachment.empty('Government ID');
+
+  // Optional supporting docs placeholders
+  final List<DocumentAttachment> supporting = [
+    DocumentAttachment.empty('Supporting Document #1'),
+    DocumentAttachment.empty('Supporting Document #2'),
+  ];
+
   bool loading = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize phone number for Philippines
     phoneNumber = PhoneNumber(
       isoCode: 'PH',
       dialCode: '+63',
@@ -54,8 +69,47 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     phoneNumberCtrl.dispose();
     addressLine2Ctrl.dispose();
     passCtrl.dispose();
+    businessNameCtrl.dispose();
     super.dispose();
   }
+
+  void _showSnack(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+
+Future<DocumentAttachment?> _pickFile({
+  required String label,
+  required List<String> allowedExtensions,
+}) async {
+  try {
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      allowedExtensions: allowedExtensions,
+      withData: true, // ✅ required on web (bytes)
+    );
+
+    if (res == null || res.files.isEmpty) return null;
+
+    final f = res.files.first;
+
+    // ✅ CRITICAL: never read f.path on web
+    final String? safePath = kIsWeb ? null : f.path;
+
+    return DocumentAttachment(
+      label: label,
+      fileName: f.name,
+      path: safePath,   // ✅ only mobile/desktop
+      bytes: f.bytes,   // ✅ web
+      sizeBytes: f.size,
+    );
+  } catch (e) {
+    _showSnack('File picker error: $e');
+    return null;
+  }
+}
+
+
 
   Future<void> _pickLocation() async {
     final res = await OSMMapLocationPicker.open(
@@ -74,8 +128,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Future<void> _submit() async {
     setState(() => loading = true);
 
-    final countryISO = (phoneNumber.isoCode ?? '').trim().toUpperCase(); // e.g. "SG"
-  
+    final countryISO = (phoneNumber.isoCode ?? '').trim().toUpperCase();
+
     // Basic validation
     if (nameCtrl.text.trim().isEmpty ||
         emailCtrl.text.trim().isEmpty ||
@@ -83,19 +137,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         addressLine2Ctrl.text.trim().isEmpty) {
       if (!mounted) return;
       setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete required fields')),
-      );
+      _showSnack('Please complete required fields');
       return;
     }
 
     // Phone number validation
-    if (!isPhoneValid || phoneNumber.phoneNumber == null || phoneNumber.phoneNumber!.isEmpty) {
+    if (!isPhoneValid ||
+        phoneNumber.phoneNumber == null ||
+        phoneNumber.phoneNumber!.isEmpty) {
       if (!mounted) return;
       setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid phone number')),
-      );
+      _showSnack('Please enter a valid phone number');
       return;
     }
 
@@ -103,87 +155,98 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (pickedLatLng == null || (addressLine1 ?? '').trim().isEmpty) {
       if (!mounted) return;
       setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please set your address location')),
-      );
+      _showSnack('Please set your address location');
       return;
+    }
+
+    // ✅ Vendor-only validation
+    if (role == UserRole.vendor) {
+      //TODO: TO enable document validation later
+      /*
+      if (businessNameCtrl.text.trim().isEmpty) {
+        if (!mounted) return;
+        setState(() => loading = false);
+        _showSnack('Please enter your business name');
+        return;
+      }
+
+      if ((businessReg.path ?? '').isEmpty) {
+        if (!mounted) return;
+        setState(() => loading = false);
+        _showSnack('Please upload your business registration/permit');
+        return;
+      }
+
+      if ((governmentId.path ?? '').isEmpty) {
+        if (!mounted) return;
+        setState(() => loading = false);
+        _showSnack('Please upload your government ID');
+        return;
+      }
+      */
     }
 
     try {
       final ctrl = ref.read(authControllerProvider.notifier);
 
-      // Get full phone number with country code 
+      // Build full phone number with dial code
       String? fullPhoneNumber;
       if (phoneNumber.dialCode != null && phoneNumber.phoneNumber != null) {
         final dialCode = phoneNumber.dialCode!;
         final phoneNum = phoneNumber.phoneNumber!;
-        
-        // Remove the dial code from the beginning if it exists
+
         final numberWithoutDialCode = phoneNum.startsWith(dialCode)
             ? phoneNum.substring(dialCode.length)
             : phoneNum.replaceAll(RegExp(r'[^\d]+'), '');
-        
+
         fullPhoneNumber = dialCode + numberWithoutDialCode;
       }
 
-       
       if (role == UserRole.customer) {
-        // ✅ Register customer WITHOUT mobile parameter if not supported
-        // Check if registerCustomer accepts mobile parameter
         await ctrl.registerCustomer(
           name: nameCtrl.text.trim(),
           email: emailCtrl.text.trim(),
           password: passCtrl.text,
-          
-          // phone number INCLUDING country code (e.g. +639171234567)
           phone: fullPhoneNumber,
-
-          // the human-readable label from the map picker
           addressLine1: addressLine1!.trim(),
-
-          // coordinates from the map picker
           latitude: pickedLatLng!.latitude,
           longitude: pickedLatLng!.longitude,
-
-          // unit / building / floor, etc.
           addressLine2: addressLine2Ctrl.text.trim(),
-
           countryISO: countryISO.isEmpty ? null : countryISO,
         );
- 
+
         if (!mounted) return;
         final email = Uri.encodeComponent(emailCtrl.text.trim());
         final next = Uri.encodeComponent('/c/home');
-        context.go('/otp?email=$email&next=$next');
-        // Debug: print all values
-        print('=== SUCCESS ===');
-         
+        context.go('/otp?email=$email&next=$next&role=$role');
       } else {
-        // ✅ Vendor still goes to /v/apply (vendor onboarding/documents)
-        // Forward the location + address so /v/apply can prefill.
-        if (!mounted) return;
+ 
+        // role == vendor
+        await ctrl.registerVendor(
+          name: nameCtrl.text.trim(),
+          email: emailCtrl.text.trim(),
+          password: passCtrl.text,
 
-        context.go(
-          '/v/apply',
-          extra: {
-            'name': nameCtrl.text.trim(),
-            'email': emailCtrl.text.trim(),
-            'mobile': fullPhoneNumber,
-            'country_code': phoneNumber.dialCode,
-            'iso_code': phoneNumber.isoCode,
-            'password': passCtrl.text,
-            'address_label': addressLine1,
-            'address_line2': addressLine2Ctrl.text.trim(),
-            'lat': pickedLatLng!.latitude,
-            'lng': pickedLatLng!.longitude,
-          },
+          businessName: businessNameCtrl.text.trim(),
+          businessRegistration: businessReg, // ✅ non-null after validation
+          governmentId: governmentId, // ✅ non-null after validation 
+
+          phone: fullPhoneNumber,
+          addressLine1: addressLine1!.trim(),
+          latitude: pickedLatLng!.latitude,
+          longitude: pickedLatLng!.longitude,
+          addressLine2: addressLine2Ctrl.text.trim(),
+          countryISO: countryISO.isEmpty ? null : countryISO,
         );
+
+        if (!mounted) return;
+        final email = Uri.encodeComponent(emailCtrl.text.trim());
+        final next = Uri.encodeComponent('/v/pending');
+        context.go('/otp?email=$email&role=$role&next=$next');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signup failed: $e')),
-      );
+      _showSnack('Signup failed: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -203,13 +266,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           children: [
             Card(
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('User type', style: TextStyle(fontWeight: FontWeight.w900)),
+                    const Text('User type',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 10),
                     SegmentedButton<UserRole>(
                       segments: const [
@@ -225,7 +291,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         ),
                       ],
                       selected: {role},
-                      onSelectionChanged: (set) => setState(() => role = set.first),
+                      onSelectionChanged: (set) =>
+                          setState(() => role = set.first),
                     ),
                     const SizedBox(height: 10),
                     const Text(
@@ -240,38 +307,33 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             const SizedBox(height: 12),
 
             TextField(
-              controller: nameCtrl, 
+              controller: nameCtrl,
               enabled: !loading,
               decoration: const InputDecoration(
                 labelText: 'Full name',
                 border: OutlineInputBorder(),
-              )
+              ),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             TextField(
-              controller: emailCtrl, 
+              controller: emailCtrl,
               enabled: !loading,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
-              )
+              ),
             ),
-            
+
             const SizedBox(height: 12),
-            
-            // UPDATED: Using intl_phone_number_input
+
             InternationalPhoneNumberInput(
               onInputChanged: (PhoneNumber number) {
-                setState(() {
-                  phoneNumber = number;
-                });
+                setState(() => phoneNumber = number);
               },
               onInputValidated: (bool value) {
-                setState(() {
-                  isPhoneValid = value;
-                });
+                setState(() => isPhoneValid = value);
               },
               selectorConfig: const SelectorConfig(
                 selectorType: PhoneInputSelectorType.DROPDOWN,
@@ -286,17 +348,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               textFieldController: phoneNumberCtrl,
               formatInput: true,
               keyboardType: const TextInputType.numberWithOptions(
-                signed: true,
-                decimal: true,
+                signed: false,
+                decimal: false,
               ),
               inputDecoration: InputDecoration(
                 labelText: 'Phone Number',
                 border: const OutlineInputBorder(),
-                errorBorder: OutlineInputBorder(
-                  borderSide: BorderSide(
-                    color: isPhoneValid ? Colors.grey : Colors.red,
-                  ),
-                ),
                 enabled: !loading,
               ),
               searchBoxDecoration: InputDecoration(
@@ -305,11 +362,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onSaved: (PhoneNumber number) {
-                // Handle when form is saved
-              },
+              onSaved: (PhoneNumber number) {},
             ),
-            
+
             const SizedBox(height: 12),
 
             TextField(
@@ -321,13 +376,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-            
+
             const SizedBox(height: 16),
 
-            // ✅ ADDRESS + OSM MAP PICKER
             Card(
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: ListTile(
                 leading: const Icon(Icons.map_outlined),
                 title: Text(
@@ -340,10 +396,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 onTap: loading ? null : _pickLocation,
               ),
             ),
-            
+
             const SizedBox(height: 12),
 
-            // UPDATED: Address Line 2 Input Field - Now Mandatory
             TextField(
               controller: addressLine2Ctrl,
               enabled: !loading,
@@ -351,18 +406,100 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 labelText: 'Address Line 2',
                 hintText: 'Unit, Building, Suite, Floor, etc.',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
               maxLines: 2,
               minLines: 1,
             ),
+
+            // ✅ Vendor-only UI
+            if (role == UserRole.vendor) ...[
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: businessNameCtrl,
+                enabled: !loading,
+                decoration: const InputDecoration(
+                  labelText: 'Business name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+              const Text('Required documents',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+
+              DocumentUploadTile(
+                title: 'Business registration',
+                subtitle:
+                    'Upload DTI/SEC registration or business permit (PDF/JPG/PNG)',
+                isRequired: true,
+                attachment: businessReg,
+                onAttachPressed: () async {
+                  final picked = await _pickFile(
+                    label: 'Business Registration',
+                    allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+                  );
+                  if (picked != null) setState(() => businessReg = picked);
+                },
+                onRemovePressed: () => setState(() =>
+                    businessReg = DocumentAttachment.empty('Business Registration')),
+              ),
+
+              DocumentUploadTile(
+                title: 'Government ID',
+                subtitle: 'Upload government-issued ID (JPG/PNG/PDF)',
+                isRequired: true,
+                attachment: governmentId,
+                onAttachPressed: () async {
+                  final picked = await _pickFile(
+                    label: 'Government ID',
+                    allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+                  );
+                  if (picked != null) setState(() => governmentId = picked);
+                },
+                onRemovePressed: () => setState(
+                    () => governmentId = DocumentAttachment.empty('Government ID')),
+              ),
+
+              const SizedBox(height: 12),
+              const Text('Supporting documents (optional)',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+
+              ...List.generate(supporting.length, (i) {
+                final item = supporting[i];
+                return DocumentUploadTile(
+                  title: item.label,
+                  subtitle: 'Add any supporting document (PDF/JPG/PNG)',
+                  isRequired: false,
+                  attachment: item,
+                  onAttachPressed: () async {
+                    final picked = await _pickFile(
+                      label: item.label,
+                      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+                    );
+                    if (picked != null) setState(() => supporting[i] = picked);
+                  },
+                  onRemovePressed: () => setState(() =>
+                      supporting[i] = DocumentAttachment.empty(item.label)),
+                );
+              }),
+
+              const SizedBox(height: 12),
+            ],
+
             const SizedBox(height: 20),
 
             FilledButton(
               onPressed: loading ? null : _submit,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: loading
                   ? const SizedBox(
@@ -372,7 +509,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     )
                   : const Text(
                       'Create Account',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
             ),
 

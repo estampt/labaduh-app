@@ -51,6 +51,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         : WidgetsBinding.instance.platformDispatcher.defaultRouteName,
 
     // ✅ Auto-redirect guard
+    
     refreshListenable: session,
     redirect: (context, state) => session.redirect(state),
 
@@ -165,7 +166,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final email = (state.uri.queryParameters['email'] ?? '');
           final next = (state.uri.queryParameters['next'] ?? '/');
-          return OtpVerifyScreen(email: email, next: next);
+          final role = (state.uri.queryParameters['role'] ?? '');
+          return OtpVerifyScreen(email: email, next: next, role: role);
         },
       ),
 

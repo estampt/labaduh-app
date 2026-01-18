@@ -1,19 +1,25 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 class DocumentAttachment {
   const DocumentAttachment({
     required this.label,
     this.fileName,
-    this.path,
+    this.path, // ✅ mobile/desktop only
+    this.bytes, // ✅ web
     this.sizeBytes,
   });
 
   final String label;
   final String? fileName;
   final String? path;
+  final Uint8List? bytes;
   final int? sizeBytes;
 
-  bool get isAttached => (fileName ?? '').trim().isNotEmpty;
+  bool get hasFile =>
+      (bytes != null && bytes!.isNotEmpty) || ((path ?? '').trim().isNotEmpty);
+
+  bool get isAttached => hasFile && (fileName ?? '').trim().isNotEmpty;
 
   String get sizeLabel {
     final s = sizeBytes;
@@ -23,10 +29,17 @@ class DocumentAttachment {
     return '${(s / (1024 * 1024)).toStringAsFixed(1)}MB';
   }
 
-  DocumentAttachment copyWith({String? fileName, String? path, int? sizeBytes}) => DocumentAttachment(
+  DocumentAttachment copyWith({
+    String? fileName,
+    String? path,
+    Uint8List? bytes,
+    int? sizeBytes,
+  }) =>
+      DocumentAttachment(
         label: label,
         fileName: fileName ?? this.fileName,
         path: path ?? this.path,
+        bytes: bytes ?? this.bytes,
         sizeBytes: sizeBytes ?? this.sizeBytes,
       );
 
@@ -60,18 +73,29 @@ class DocumentUploadTile extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
-        leading: Icon(ok ? Icons.check_circle : Icons.upload_file, color: ok ? Colors.green : null),
+        leading: Icon(ok ? Icons.check_circle : Icons.upload_file,
+            color: ok ? Colors.green : null),
         title: Row(
           children: [
-            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+            Expanded(
+              child: Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
+            ),
             if (isRequired)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text('REQUIRED', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 12)),
+                child: const Text(
+                  'REQUIRED',
+                  style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12),
+                ),
               ),
           ],
         ),

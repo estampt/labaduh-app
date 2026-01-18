@@ -10,11 +10,12 @@ class OtpVerifyScreen extends ConsumerStatefulWidget {
     super.key,
     required this.email,
     required this.next,
+    required this.role,
   });
 
   final String email;
   final String next;
-
+  final String role;
   @override
   ConsumerState<OtpVerifyScreen> createState() => _OtpVerifyScreenState();
 }
@@ -35,11 +36,14 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       await ref.read(authRepositoryProvider).verifyOtp(
             email: widget.email,
             code: codeCtrl.text.trim(),
+            role: widget.role,
           );
 
+    
       // refresh guard/session then go
       ref.read(sessionNotifierProvider).refresh();
 
+      
       if (!mounted) return;
       context.go(widget.next);
     } catch (e) {
@@ -50,6 +54,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     } finally {
       if (mounted) setState(() => loading = false);
     }
+    
   }
 
   Future<void> _resend() async {
