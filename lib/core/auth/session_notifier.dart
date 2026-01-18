@@ -96,12 +96,16 @@ class SessionNotifier extends ChangeNotifier {
     }
 
     // Vendor approval gating
-    if (userType == 'vendor' && loc.startsWith('/v')) {
+    if (userType == 'vendor' && loc.startsWith('/v')) { 
       if (vendorApproval == 'pending' && !loc.startsWith('/v/pending')) {
         return '/v/pending/${vendorId ?? '0'}';
       }
       if (vendorApproval == 'rejected' && !loc.startsWith('/v/rejected')) {
         return '/v/rejected/${vendorId ?? '0'}';
+      }
+      if (vendorApproval == 'approved' &&
+          (loc.startsWith('/v/pending') || loc.startsWith('/v/rejected'))) {
+        return '/v/home';
       }
     }
 

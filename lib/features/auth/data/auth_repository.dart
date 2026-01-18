@@ -466,12 +466,11 @@ class AuthRepository {
   Future<String?> refreshMe() async {
     final res = await _api.dio.get('/api/v1/auth/me');
     final data = (res.data as Map).cast<String, dynamic>();
-
-    final user = data['user'] is Map ? (data['user'] as Map).cast<String, dynamic>() : <String, dynamic>{};
-    final userType = (user['user_type'] ?? user['type'] ?? '').toString();
-
+    
     final vendor = data['vendor'];
-    final approval = vendor is Map ? (vendor['approval_status']?.toString()) : null;
+    final approval = (res.data['data']?['vendor']?['approval_status'])?.toString();
+    final userType = (res.data['data']?['user']?['user_type'])?.toString() ?? '';
+
     final vendorId = vendor is Map ? (vendor['id']?.toString()) : null;
 
     // Keep existing token, only refresh metadata.
@@ -483,6 +482,7 @@ class AuthRepository {
         vendorApprovalStatus: approval,
         vendorId: vendorId,
       );
+      
     }
     return approval;
   }
@@ -530,9 +530,7 @@ class AuthRepository {
  
       final Map<String, dynamic> body = _asJsonMap(res.data);
 
-      // ✅ If success: read data.user_type (example)
-      final dynamic userType = body['data']?['user_type']; // could be null if not present
-      // or if your API returns it at root: body['user_type']
+      // ✅ If success: read data.user_type (example)  
 
       if (res.statusCode != null && res.statusCode! >= 400) {
         print('❌ Server returned error ${res.statusCode}');

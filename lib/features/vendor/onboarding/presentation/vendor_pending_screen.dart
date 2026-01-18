@@ -34,7 +34,7 @@ class _VendorPendingScreenState extends ConsumerState<VendorPendingScreen> {
         setState(() => status = approval);
       }
 
-      if (approval == 'approved') {
+      if (approval == 'approved') { 
         context.go('/v/home');
       } else if (approval == 'rejected') {
         // If you have a rejected route, use it. If not, keep pending UI.
