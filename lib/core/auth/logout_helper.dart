@@ -1,19 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/auth/state/auth_providers.dart';
-import 'session_notifier.dart';
-
+// adjust these imports to your actual files
+import 'package:labaduh/core/auth/session_notifier.dart'; // contains sessionNotifierProvider 
+import 'package:labaduh/core/network/dio_provider.dart'; 
 Future<void> performLogout({
   required WidgetRef ref,
   required GoRouter router,
 }) async {
-  // Optional: call backend logout + clear token
-  await ref.read(authControllerProvider.notifier).logout();
+  // 1) Clear secure storage
+  final store = ref.read(tokenStorageProvider);
+  await store.clearToken();
 
-  // Reset session / guards
-  ref.read(sessionNotifierProvider).refresh();
+  // 2) Reset in-memory session so guards/redirects update immediately
+  final session = ref.read(sessionNotifierProvider);
+  session.token = null;
+  session.userType = null;
+  session.vendorApproval = null;
+  session.vendorId = null;
+  session.refresh(); // see note below
 
-  // Reset navigation stack
-  router.go('/');
+  // 3) Navigate to login (change if your route is different)
+  router.go('/login');
 }

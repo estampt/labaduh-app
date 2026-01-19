@@ -6,14 +6,52 @@ import '../../../shared/widgets/document_upload_tile.dart';
 import '../../../core/network/api_client.dart';
 import 'token_store.dart';
 
+class LoginOutcome {
+  const LoginOutcome._({
+    required this.ok,
+    required this.nextRoute,
+    this.message,
+  });
+
+  final bool ok;
+
+  /// Where the app should navigate when [ok] is true.
+  final String nextRoute;
+
+  /// Error message from API / logic when [ok] is false.
+  final String? message;
+
+  factory LoginOutcome.ok(String nextRoute) => LoginOutcome._(
+        ok: true,
+        nextRoute: nextRoute,
+      );
+
+  factory LoginOutcome.fail(String message) => LoginOutcome._(
+        ok: false,
+        nextRoute: '',
+        message: message,
+      );
+}
+
 class AuthRepository {
   AuthRepository(this._api, this._tokenStore);
   final ApiClient _api;
   final TokenStore _tokenStore;
 
-  /// ✅ LOGIN (Laravel)
-  /// Expected response: { token, user: { user_type }, vendor?: { id, approval_status } }
-  Future<void> login({
+  /// Login outcome used by UI to decide where to navigate.
+  ///
+  /// Rules:
+  /// 1) If token is missing -> [ok]=false and return API message.
+  /// 2) role=customer and verified -> /c/home
+  /// 3) role=vendor and verified and approval_status=approved -> /v/home
+  /// 4) role=vendor OR customer and NOT verified -> /otp/{userId}
+  /// 5) role=vendor and verified and approval_status=pending -> /v/pending
+  ///
+  /// Notes:
+  /// - We read role/verification/approval from `auth` first (if present),
+  ///   otherwise fall back to `user` / `vendor`.
+  /// - We still save session (token + role + vendor status/id) when token exists.
+  Future<LoginOutcome> login({
     required String email,
     required String password,
   }) async {
@@ -23,27 +61,110 @@ class AuthRepository {
         'email': email,
         'password': password,
       },
+      options: Options(
+        headers: {'Accept': 'application/json'},
+        validateStatus: (s) => true, // handle errors ourselves
+      ),
     );
 
-    final data = (res.data as Map).cast<String, dynamic>();
-    final token = (data['token'] ?? '').toString();
+    // Parse response safely.
+    final Map<String, dynamic> data;
+    if (res.data is Map) {
+      data = (res.data as Map).cast<String, dynamic>();
+    } else if (res.data is String) {
+      final s = (res.data as String).trim();
+      data = s.isEmpty ? <String, dynamic>{} : (jsonDecode(s) as Map).cast<String, dynamic>();
+    } else {
+      data = <String, dynamic>{};
+    }
+
+    final token = (data['token'] ?? '').toString().trim();
+    if (token.isEmpty) {
+      // 1) Token missing -> stop and show API message.
+      final msg = (data['message'] ?? 'Login failed').toString();
+      return LoginOutcome.fail(msg);
+    }
 
     final user = data['user'] is Map ? (data['user'] as Map).cast<String, dynamic>() : <String, dynamic>{};
-    final userType = (user['user_type'] ?? user['type'] ?? '').toString();
+    final auth = data['auth'] is Map ? (data['auth'] as Map).cast<String, dynamic>() : <String, dynamic>{};
+    final vendor = data['vendor'] is Map ? (data['vendor'] as Map).cast<String, dynamic>() : <String, dynamic>{};
 
-    final vendor = data['vendor'];
-    final vendorId = vendor is Map ? (vendor['id']?.toString()) : null;
-    final approval = vendor is Map ? (vendor['approval_status']?.toString()) : null;
+    final userId = (user['id'] ?? auth['user_id'] ?? '').toString();
 
-    if (token.isNotEmpty) {
-      await _tokenStore.saveSession(
-        token: token,
-        userType: userType.isEmpty ? 'customer' : userType,
-        vendorApprovalStatus: approval,
-        vendorId: vendorId,
-      );
-    }
+    final role = (auth['role'] ?? user['role'] ?? user['user_type'] ?? user['type'] ?? '').toString().trim();
+
+    final verified = _toBool(auth['is_verified'] ?? user['is_verified']);
+
+    final approval = (auth['vendor_approval_status'] ?? vendor['approval_status'] ?? '').toString().trim();
+    final vendorId = (vendor['id'] ?? auth['vendor_id'])?.toString();
+
+    // Save session when token exists.
+    await _tokenStore.saveSession(
+      token: token,
+      userType: role.isEmpty ? 'customer' : role,
+      vendorApprovalStatus: approval.isEmpty ? null : approval,
+      vendorId: vendorId,
+    );
+
+    // Decide next route based on your rules.
+    final next = _resolveNextRoute(
+      role: role,
+      verified: verified,
+      userId: userId,
+      vendorApprovalStatus: approval,
+    );
+
+    return LoginOutcome.ok(next);
   }
+
+  // ---------- helpers ----------
+
+  bool _toBool(dynamic v) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = (v ?? '').toString().trim().toLowerCase();
+    if (s == '1' || s == 'true' || s == 'yes') return true;
+    if (s == '0' || s == 'false' || s == 'no' || s.isEmpty) return false;
+    return false;
+  }
+
+  String _resolveNextRoute({
+    required String role,
+    required bool verified,
+    required String userId,
+    required String? vendorApprovalStatus,
+  }) {
+    final r = role.trim().toLowerCase();
+    final approval = (vendorApprovalStatus ?? '').trim().toLowerCase();
+
+    // 4) vendor OR customer and not verified -> otp
+    if ((r == 'vendor' || r == 'customer') && !verified) {
+      final id = userId.trim();
+      return id.isEmpty ? '/otp' : '/otp/$id';
+    }
+
+    // 2) customer and verified -> /c/home
+    if ((r == 'customer'||r=='admin') && verified) {
+      return '/c/home';
+    }
+
+    // vendor verified -> depends on approval
+    if (r == 'vendor' && verified) {
+      // 3) approved -> /v/home
+      if (approval == 'approved') return '/v/home';
+
+      // 5) pending -> /v/pending
+      if (approval == 'pending') return '/v/pending';
+
+      // fallback: keep vendors out of home if status unknown
+      return '/v/pending';
+    }
+
+    // fallback (admin/unknown)
+    return '/';
+  }
+
+
 
   MultipartFile _toMultipart(DocumentAttachment doc) {
   // ✅ Web: use bytes
@@ -219,22 +340,7 @@ class AuthRepository {
       }
     } 
     catch (e, stackTrace) {
-      print('🔥 CRITICAL ERROR in registerCustomer:');
-      print('  Type: ${e.runtimeType}');
-      print('  Error: $e');
-      print('  Stack trace: $stackTrace');
-      
-      // Check if it's a DioException with more details
-      if (e is DioException) {
-        print('  DioError details:');
-        print('    Type: ${e.type}');
-        print('    Message: ${e.message}');
-        print('    Error: ${e.error}');
-        print('    Response status: ${e.response?.statusCode}');
-        print('    Response data: ${e.response?.data}');
-        print('    Response headers: ${e.response?.headers}');
-      }
-      
+          
       rethrow;
     }
   }

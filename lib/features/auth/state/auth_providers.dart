@@ -28,17 +28,18 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   final Ref ref;
 
   /// ✅ LOGIN
-  Future<void> login({
+  Future<LoginOutcome> login({
     required String email,
     required String password,
   }) async {
     state = const AsyncLoading();
     try {
-      await ref.read(authRepositoryProvider).login(
+      final outcome = await ref.read(authRepositoryProvider).login(
             email: email,
             password: password,
           );
       state = const AsyncData(null);
+      return outcome;
     } catch (e, st) {
       
       state = AsyncError(e, st);

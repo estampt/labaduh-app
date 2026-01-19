@@ -31,18 +31,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final ctrl = ref.read(authControllerProvider.notifier);
 
-      await ctrl.login(
+      final outcome = await ctrl.login(
         email: emailCtrl.text.trim(),
         password: passCtrl.text,
       );
+
+      // 1) Token missing (or other login failure): show API message and stop.
+      if (!outcome.ok) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(outcome.message ?? 'Login failed')),
+        );
+        return;
+      }
 
       // 🔑 IMPORTANT: notify router that auth state changed
       ref.read(sessionNotifierProvider).refresh();
 
       if (!mounted) return;
 
-      // 🔑 Let router decide where to go (customer / vendor / admin)
-      context.go('/');
+      // Navigate based on API auth result (customer/vendor/otp/pending)
+      context.go(outcome.nextRoute);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

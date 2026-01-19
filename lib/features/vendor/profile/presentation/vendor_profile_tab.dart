@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:labaduh/core/auth/logout_helper.dart';
 
 class VendorProfileTab extends StatelessWidget {
   const VendorProfileTab({super.key});
@@ -58,14 +60,27 @@ class VendorProfileTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: const ListTile(
-                leading: Icon(Icons.logout),
-                title: Text('Logout'),
-                subtitle: Text('Hook to auth later'),
-              ),
+
+            // ✅ LOGOUT (Consumer gives us ref)
+            Consumer(
+              builder: (context, ref, _) {
+                return Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: const Text('Logout'),
+                    subtitle: const Text('Sign out of this device'),
+                    onTap: () async {
+                      await performLogout(
+                        ref: ref,
+                        router: GoRouter.of(context),
+                      );
+                      if (!context.mounted) return;
+                    },
+                  ),
+                );
+              },
             ),
           ],
         ),
