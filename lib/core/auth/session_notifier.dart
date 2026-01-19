@@ -16,11 +16,19 @@ class SessionNotifier extends ChangeNotifier {
   String? vendorId;
 
   Future<void> load() async {
+    debugPrint('SessionNotifier.load() START');
+
     final store = ref.read(tokenStoreProvider);
+
     token = await store.readToken();
     userType = await store.readUserType();
     vendorApproval = await store.readVendorApprovalStatus();
     vendorId = await store.readVendorId();
+
+    debugPrint('SessionNotifier.load() DONE: '
+        'token=${token != null}, userType=$userType, '
+        'vendorApproval=$vendorApproval, vendorId=$vendorId');
+
     _initialized = true;
     notifyListeners();
   }
@@ -33,6 +41,9 @@ class SessionNotifier extends ChangeNotifier {
 
   /// Router guard (synchronous).
   String? redirect(GoRouterState state) {
+    debugPrint('redirect: loc=${state.matchedLocation} '
+      'init=$_initialized type=$userType approval=$vendorApproval');
+      
     final loc = state.matchedLocation;
 
     // Public routes
@@ -111,6 +122,22 @@ class SessionNotifier extends ChangeNotifier {
 
     return null;
   }
+
+  void applySessionUpdate({
+    String? token,
+    String? userType,
+    String? vendorApproval,
+    String? vendorId,
+  }) {
+    if (token != null) this.token = token;
+    if (userType != null) this.userType = userType;
+    if (vendorApproval != null) this.vendorApproval = vendorApproval;
+    if (vendorId != null) this.vendorId = vendorId;
+
+    _initialized = true;
+    notifyListeners();
+  }
+
 }
 
 final sessionNotifierProvider = ChangeNotifierProvider<SessionNotifier>((ref) {

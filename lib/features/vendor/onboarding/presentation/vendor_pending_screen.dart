@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../auth/state/auth_providers.dart';
+import '../../../../core/auth/session_notifier.dart';
+
 
 class VendorPendingScreen extends ConsumerStatefulWidget {
   const VendorPendingScreen({super.key, required this.appId});
@@ -29,10 +31,13 @@ class _VendorPendingScreenState extends ConsumerState<VendorPendingScreen> {
     try {
       final repo = ref.read(authRepositoryProvider);
       final approval = await repo.refreshMe();
+    
+
       if (!mounted) return;
       if (approval != null && approval.isNotEmpty) {
         setState(() => status = approval);
       }
+      await ref.read(sessionNotifierProvider).load();
 
       if (approval == 'approved') { 
         context.go('/v/home');

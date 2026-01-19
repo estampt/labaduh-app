@@ -9,21 +9,30 @@ class TokenStore {
   final FlutterSecureStorage _storage;
   const TokenStore(this._storage);
 
-  Future<void> saveSession({
-    required String token,
-    required String userType,
-    String? vendorApprovalStatus,
-    String? vendorId,
-  }) async {
-    await _storage.write(key: _tokenKey, value: token);
-    await _storage.write(key: _userTypeKey, value: userType);
-    if (vendorApprovalStatus != null) {
-      await _storage.write(key: _vendorStatusKey, value: vendorApprovalStatus);
-    }
-    if (vendorId != null) {
-      await _storage.write(key: _vendorIdKey, value: vendorId);
-    }
+ Future<void> saveSession({
+  required String token,
+  required String userType,
+  String? vendorApprovalStatus,
+  String? vendorId,
+}) async {
+  await _storage.write(key: _tokenKey, value: token);
+  await _storage.write(key: _userTypeKey, value: userType);
+
+  // ✅ vendor approval: write if value exists, otherwise clear it
+  if (vendorApprovalStatus == null || vendorApprovalStatus.isEmpty) {
+    await _storage.delete(key: _vendorStatusKey);
+  } else {
+    await _storage.write(key: _vendorStatusKey, value: vendorApprovalStatus);
   }
+
+  // ✅ vendor id: write if exists, otherwise clear it
+  if (vendorId == null || vendorId.isEmpty) {
+    await _storage.delete(key: _vendorIdKey);
+  } else {
+    await _storage.write(key: _vendorIdKey, value: vendorId);
+  }
+}
+
 
   Future<String?> readToken() => _storage.read(key: _tokenKey);
   Future<String?> readUserType() => _storage.read(key: _userTypeKey);
