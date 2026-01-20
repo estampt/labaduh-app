@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Adjust this import if your project path differs.
 // This file should provide `apiClientProvider` with an authenticated Dio.
 import '../../../../core/network/api_client.dart';
- 
+import '../../../../core/ui/service_icons.dart';
 
 /// ✅ Admin: Manage SYSTEM services + default pricing
 ///
@@ -78,8 +78,9 @@ class AdminPricingScreen extends ConsumerWidget {
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           leading: CircleAvatar(
-                            child: Text((s.baseUnit ?? 'kg').toUpperCase().substring(0, 1)),
+                            child: Icon(ServiceIcons.resolve(s.iconKey), size: 20),
                           ),
+
                           title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.w800)),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 6),
@@ -153,22 +154,33 @@ class AdminPricingScreen extends ConsumerWidget {
   static Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AdminService s) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete service?'),
         content: Text('Delete "${s.name}"? This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
+
     if (ok != true) return;
 
     await ref.read(adminServicesProvider.notifier).deleteService(s.id);
+
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service deleted')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Service deleted')),
+      );
     }
   }
+
 
   static Future<void> _openUpsertDialog(
     BuildContext context,
@@ -284,6 +296,7 @@ class AdminService {
     required this.baseUnit,
     required this.defaultPricingModel,
     required this.allowVendorOverridePrice,
+    required this.iconKey,
     this.defaultMinKg,
     this.defaultRatePerKg,
     this.defaultRatePerPiece,
@@ -296,12 +309,22 @@ class AdminService {
   final String? defaultPricingModel;
   final bool allowVendorOverridePrice;
 
+  /// Optional icon key stored by API (e.g. "local_laundry_service").
+  /// If null/empty, UI will use a sensible fallback.
+  final String? iconKey;
+
+  /// Optional icon key (Material icon name) stored by backend (recommended) or
+  /// used locally for display.
+  ///
+  /// Backend field name suggestion: `icon` (string)
+
   final double? defaultMinKg;
   final double? defaultRatePerKg;
   final double? defaultRatePerPiece;
 
   AdminService copyWith({
     bool? isActive,
+    String? iconKey,
   }) {
     return AdminService(
       id: id,
@@ -310,6 +333,7 @@ class AdminService {
       baseUnit: baseUnit,
       defaultPricingModel: defaultPricingModel,
       allowVendorOverridePrice: allowVendorOverridePrice,
+      iconKey: iconKey ?? this.iconKey,
       defaultMinKg: defaultMinKg,
       defaultRatePerKg: defaultRatePerKg,
       defaultRatePerPiece: defaultRatePerPiece,
@@ -340,6 +364,14 @@ class AdminService {
           ? (json['allow_vendor_override_price'] as bool)
           : (json['allow_vendor_override_price']?.toString() == '1' ||
               json['allow_vendor_override_price']?.toString() == 'true'),
+
+      // Support either `icon` or `icon_key` if you choose either naming server-side.
+      iconKey: (() {
+        final v = json['icon'] ?? json['icon_key'];
+        final s = v?.toString().trim();
+        if (s == null || s.isEmpty) return null;
+        return s;
+      })(),
     );
   }
 }
@@ -351,6 +383,7 @@ class _UpsertPayload {
     required this.isActive,
     required this.defaultPricingModel,
     required this.allowVendorOverridePrice,
+    this.iconKey,
     this.defaultMinKg,
     this.defaultRatePerKg,
     this.defaultRatePerPiece,
@@ -362,12 +395,15 @@ class _UpsertPayload {
   final String defaultPricingModel; // per_kg_min | per_piece
   final bool allowVendorOverridePrice;
 
+  /// Material icon key (stored server-side). Example: "local_laundry_service".
+  final String? iconKey;
+
   final double? defaultMinKg;
   final double? defaultRatePerKg;
   final double? defaultRatePerPiece;
 
   Map<String, dynamic> toJson() {
-    return {
+    final m = <String, dynamic>{
       'name': name,
       'base_unit': baseUnit,
       'is_active': isActive,
@@ -377,6 +413,14 @@ class _UpsertPayload {
       'default_rate_per_piece': defaultRatePerPiece,
       'allow_vendor_override_price': allowVendorOverridePrice,
     };
+
+    // Only send icon if set.
+    if (iconKey != null && iconKey!.trim().isNotEmpty) {
+      // Server can accept either `icon` or `icon_key` depending on your naming.
+      // Use `icon` as the primary.
+      m['icon'] = iconKey;
+    }
+    return m;
   }
 }
 
@@ -402,6 +446,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
   String pricingModel = 'per_kg_min';
   bool isActive = true;
   bool allowOverride = true;
+  String? iconKey;
 
   @override
   void initState() {
@@ -416,6 +461,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
     pricingModel = s?.defaultPricingModel ?? (baseUnit == 'kg' ? 'per_kg_min' : 'per_piece');
     isActive = s?.isActive ?? true;
     allowOverride = s?.allowVendorOverridePrice ?? true;
+    iconKey = (s?.iconKey?.trim().isNotEmpty == true) ? s!.iconKey : _ServiceIcons.defaultIconKeyForBaseUnit(baseUnit);
   }
 
   @override
@@ -462,6 +508,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
         baseUnit: baseUnit,
         isActive: isActive,
         defaultPricingModel: pricingModel,
+        iconKey: iconKey,
         defaultMinKg: pricingModel == 'per_kg_min' ? _d(minKgCtrl) : null,
         defaultRatePerKg: pricingModel == 'per_kg_min' ? _d(rateKgCtrl) : null,
         defaultRatePerPiece: pricingModel == 'per_piece' ? _d(ratePieceCtrl) : null,
@@ -514,6 +561,11 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
               },
             ),
             const SizedBox(height: 12),
+            _IconPickerTile(
+              iconKey: iconKey,
+              onPick: (k) => setState(() => iconKey = k),
+            ),
+            const SizedBox(height: 12),
             if (pricingModel == 'per_kg_min') ...[
               TextField(
                 controller: minKgCtrl,
@@ -554,6 +606,195 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(onPressed: _save, child: const Text('Save')),
       ],
+    );
+  }
+}
+
+// ---------------------------
+// Icon picker
+// ---------------------------
+
+class _ServiceIcons {
+  static const String laundry = 'local_laundry_service';
+  static const String dryClean = 'dry_cleaning';
+  static const String iron = 'iron';
+  static const String delivery = 'local_shipping';
+  static const String express = 'bolt';
+  static const String blanket = 'bed';
+  static const String shirt = 'checkroom';
+  static const String pants = 'hiking';
+  static const String shoes = 'hiking_shoes';
+  static const String basket = 'shopping_basket';
+  static const String price = 'price_change';
+
+  static String defaultIconKeyForBaseUnit(String baseUnit) {
+    return baseUnit == 'kg' ? laundry : blanket;
+  }
+
+  static IconData iconForKey(String? key) {
+    switch ((key ?? '').trim()) {
+      case laundry:
+        return Icons.local_laundry_service;
+      case dryClean:
+        return Icons.dry_cleaning;
+      case iron:
+        return Icons.iron;
+      case delivery:
+        return Icons.local_shipping;
+      case express:
+        return Icons.bolt;
+      case blanket:
+        return Icons.bed;
+      case shirt:
+        return Icons.checkroom;
+      case pants:
+        return Icons.hiking;
+      case shoes:
+        // `hiking_shoes` doesn't exist in material; fallback.
+        return Icons.hiking;
+      case basket:
+        return Icons.shopping_basket;
+      case price:
+        return Icons.price_change;
+      default:
+        return Icons.local_laundry_service;
+    }
+  }
+
+  static const List<_IconOption> options = [
+    _IconOption(key: laundry, label: 'Laundry', icon: Icons.local_laundry_service),
+    _IconOption(key: dryClean, label: 'Dry Clean', icon: Icons.dry_cleaning),
+    _IconOption(key: iron, label: 'Iron', icon: Icons.iron),
+    _IconOption(key: blanket, label: 'Blanket', icon: Icons.bed),
+    _IconOption(key: shirt, label: 'Clothes', icon: Icons.checkroom),
+    _IconOption(key: delivery, label: 'Delivery', icon: Icons.local_shipping),
+    _IconOption(key: express, label: 'Express', icon: Icons.bolt),
+    _IconOption(key: basket, label: 'Basket', icon: Icons.shopping_basket),
+    _IconOption(key: price, label: 'Price', icon: Icons.price_change),
+  ];
+}
+
+class _IconOption {
+  const _IconOption({required this.key, required this.label, required this.icon});
+  final String key;
+  final String label;
+  final IconData icon;
+}
+
+class _IconPickerTile extends StatelessWidget {
+  const _IconPickerTile({required this.iconKey, required this.onPick});
+  final String? iconKey;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentKey = (iconKey ?? _ServiceIcons.laundry).trim();
+    final currentIcon = _ServiceIcons.iconForKey(currentKey);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        final picked = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (_) => _IconPickerSheet(selectedKey: currentKey),
+        );
+        if (picked != null && picked.trim().isNotEmpty) {
+          onPick(picked.trim());
+        }
+      },
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Icon',
+          border: OutlineInputBorder(),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(child: Icon(currentIcon, size: 20)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                currentKey,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconPickerSheet extends StatelessWidget {
+  const _IconPickerSheet({required this.selectedKey});
+  final String selectedKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final opts = _ServiceIcons.options;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Select an icon',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: GridView.builder(
+                shrinkWrap: true,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.15,
+                ),
+                itemCount: ServiceIcons.items.length,
+                itemBuilder: (context, i) {
+                  final o = ServiceIcons.items[i];
+                  final isSel = o.key == selectedKey;
+
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => Navigator.of(context).pop(o.key),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          width: isSel ? 2 : 1,
+                          color: isSel
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(o.icon, size: 28),
+                          const SizedBox(height: 8),
+                          Text(
+                            o.label,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
