@@ -105,10 +105,39 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             child: ListTile(
-                              leading: const CircleAvatar(child: Icon(Icons.store)),
-                              title: Text(a.vendorName, style: const TextStyle(fontWeight: FontWeight.w900)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              leading: CircleAvatar(
+                                child: const Icon(Icons.store),
+                              ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      a.ownerName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               subtitle: Text(
-                                '${a.addressLine1Short} • Owner: ${a.ownerName}\nApplied: ${a.createdAtLabel}',
+                                [
+                                  // Address line 1 + 2
+                                  [
+                                    a.addressLine1Short,
+                                    if ((a.addressLine2 ?? '').trim().isNotEmpty) a.addressLine2!.trim(),
+                                  ].join(' '),
+
+                                  // Contact number (optional)
+                                  if ((a.contactNumber ?? '').trim().isNotEmpty)
+                                    'Contact: ${a.contactNumber!.trim()}',
+
+                                  // Vendor name + applied date
+                                  'Vendor: ${a.vendorName} • Applied: ${a.createdAtLabel}',
+                                ].join('\n'),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               isThreeLine: true,
                               trailing: Container(
@@ -124,6 +153,7 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
                               ),
                               onTap: () => context.push('/a/vendors/${a.id}'),
                             ),
+
                           );
                         },
                       );
@@ -140,29 +170,53 @@ class _AdminVendorsScreenState extends ConsumerState<AdminVendorsScreen> {
 /// Provider (API fetch)
 /// =======================
 
-final adminVendorsProvider = FutureProvider.autoDispose<List<AdminVendorRow>>((ref) async {
-  // ✅ Adjust this ONE line if your API client/provider is different.
+/// =======================
+/// Provider (API fetch)
+/// =======================
+
+final adminVendorsProvider =
+    FutureProvider.autoDispose<List<AdminVendorRow>>((ref) async {
   final dio = ref.read(apiClientProvider).dio as Dio;
 
-  // Your correct endpoint based on your example: /api/v1/admin/vendors
-  final res = await dio.get('/api/v1/admin/vendors', queryParameters: {
-    'per_page': 50,
-  });
+  final res = await dio.get(
+    '/api/v1/admin/vendors',
+    queryParameters: {'per_page': 50},
+  );
 
-  final body = res.data;
-  if (body is! Map) throw Exception('Unexpected response type');
+  dynamic body = res.data;
 
-  final data = body['data'];
-  if (data is! Map) throw Exception('Missing data wrapper');
+  // If Dio returns something unexpected (rare), fail early.
+  if (body is! Map) {
+    throw Exception('Unexpected response type: ${body.runtimeType}');
+  }
 
-  final list = data['data'];
-  if (list is! List) throw Exception('Missing paginated data list');
+  // ✅ Expected: { "data": { "current_page":..., "data":[...] } }
+  // But we also safely handle: { "data": [ ... ] }
+  // And also: { "status":..., "data": { ... } }
+  final dynamic dataWrapper = body['data'];
 
-  return list
+  List<dynamic> items;
+
+  if (dataWrapper is Map) {
+    final dynamic inner = dataWrapper['data'];
+    if (inner is List) {
+      items = inner;
+    } else {
+      throw Exception('Missing "data.data" list in response');
+    }
+  } else if (dataWrapper is List) {
+    // fallback: { data: [ ... ] }
+    items = dataWrapper;
+  } else {
+    throw Exception('Missing "data" wrapper in response');
+  }
+
+  return items
       .whereType<Map>()
       .map((m) => AdminVendorRow.fromJson(Map<String, dynamic>.from(m)))
       .toList();
 });
+
 
 class AdminVendorRow {
   AdminVendorRow({
@@ -175,17 +229,19 @@ class AdminVendorRow {
     this.email,
     this.contactNumber,
     this.addressLine1,
+    this.addressLine2,
   });
 
   final String id; // keep same as your old screen
   final String vendorName; // vendor_name
   final String ownerName; // name (or user.name)
   final String approvalStatus; // pending/approved/rejected
+  String? addressLine2;
+  String? contactNumber;
   final bool isActive;
   final DateTime createdAt;
 
-  final String? email;
-  final String? contactNumber;
+  final String? email; 
   final String? addressLine1;
 
   VendorApprovalStatus get status {
@@ -214,22 +270,46 @@ class AdminVendorRow {
   }
 
   factory AdminVendorRow.fromJson(Map<String, dynamic> json) {
-    final user = json['user'] is Map ? Map<String, dynamic>.from(json['user']) : null;
+    final user = json['user'] is Map
+        ? Map<String, dynamic>.from(json['user'] as Map)
+        : <String, dynamic>{};
 
-    final ownerName = (json['name']?.toString().trim().isNotEmpty ?? false)
-        ? json['name'].toString()
-        : (user?['name']?.toString() ?? '');
+    // Safe id parse (handles int/string)
+    final idVal = json['id'];
+    final id = idVal == null
+        ? ''
+        : (idVal is num ? idVal.toInt().toString() : idVal.toString());
+
+    // Owner name: prefer root name if not empty, else fallback to user.name
+    final rootName = (json['name'] ?? '').toString().trim();
+    final ownerName = rootName.isNotEmpty
+        ? rootName
+        : (user['name'] ?? '').toString();
+
+    // Vendor name: prefer vendor_name, else fallback to vendor's name
+    final vendorName = (json['vendor_name'] ?? json['name'] ?? '').toString();
+
+    // Vendor name: prefer vendor_name, else fallback to vendor's name
+    final address_line2 = (json['address_line2'] ?? '').toString();
+
+    final contact_number = (json['contact_number'] ?? '').toString();
+
+    // created_at parsing (nullable)
+    final createdAtStr = (json['created_at'] ?? '').toString();
+    final createdAt = DateTime.tryParse(createdAtStr);
 
     return AdminVendorRow(
-      id: (json['id'] as num).toInt().toString(),
-      vendorName: (json['vendor_name'] ?? json['name'] ?? '').toString(),
+      id: id,
+      vendorName: vendorName,
       ownerName: ownerName,
       approvalStatus: (json['approval_status'] ?? 'pending').toString(),
       isActive: json['is_active'] == true || json['is_active']?.toString() == '1',
-      createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ?? DateTime.now(),
-      email: (json['email'] ?? user?['email'])?.toString(),
-      contactNumber: (json['contact_number'] ?? user?['contact_number'])?.toString(),
-      addressLine1: (json['address_line1'] ?? user?['address_line1'])?.toString(),
+      createdAt: createdAt ?? DateTime.fromMillisecondsSinceEpoch(0), // 1970 as explicit fallback
+      email: (json['email'] ?? user['email'])?.toString(),
+      contactNumber: (json['contact_number'] ?? user['contact_number'])?.toString(),
+      addressLine1: (json['address_line1'] ?? user['address_line1'])?.toString(),
+      addressLine2: (json['address_line2'] ?? user['address_line2'])?.toString(), 
     );
   }
+
 }
