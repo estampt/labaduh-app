@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 // Adjust this import if your project path differs.
 // This file should provide `apiClientProvider` with an authenticated Dio.
@@ -41,6 +42,12 @@ class AdminPricingScreen extends ConsumerWidget {
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh),
                 onPressed: () => ctrl.refresh(),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/a/pricing/addons'),
+                icon: const Icon(Icons.extension_outlined),
+                label: const Text('Add-ons'),
               ),
               FilledButton.icon(
                 onPressed: () => _openUpsertDialog(context, ref, initial: null),

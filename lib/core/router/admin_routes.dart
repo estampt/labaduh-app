@@ -10,6 +10,8 @@ import '../../features/admin/pricing/presentation/admin_pricing_screen.dart';
 import '../../features/admin/settings/presentation/admin_settings_screen.dart';
 import '../../features/admin/orders/presentation/admin_order_detail_screen.dart';
 import '../../features/admin/vendors/presentation/admin_vendor_detail_screen.dart';
+import '../../features/admin/pricing/presentation/admin_addons_screen.dart';
+
 
 final List<RouteBase> adminRoutes = [
   StatefulShellRoute.indexedStack(
@@ -55,9 +57,19 @@ final List<RouteBase> adminRoutes = [
       ),
       StatefulShellBranch(
         routes: [
-          GoRoute(path: '/a/pricing', builder: (context, state) => const AdminPricingScreen()),
+          GoRoute(
+            path: '/a/pricing',
+            builder: (context, state) => const AdminPricingScreen(),
+            routes: [
+              GoRoute(
+                path: 'addons', // ✅ becomes /a/pricing/addons
+                builder: (context, state) => const AdminAddonsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
+
       StatefulShellBranch(
         routes: [
           GoRoute(path: '/a/settings', builder: (context, state) => const AdminSettingsScreen()),

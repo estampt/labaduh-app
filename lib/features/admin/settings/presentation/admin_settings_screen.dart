@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../state/admin_settings_controller.dart';
+
+import '../../../../core/auth/logout_helper.dart';
 
 class AdminSettingsScreen extends ConsumerWidget {
   const AdminSettingsScreen({super.key});
@@ -73,6 +76,22 @@ class AdminSettingsScreen extends ConsumerWidget {
               secondary: const Icon(Icons.workspace_premium_outlined),
             ),
           ),
+          // ---------------- LOGOUT ----------------
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Logout'),
+                subtitle: const Text('Sign out of this device'),
+                onTap: () async {
+                  await performLogout(
+                    ref: ref,
+                    router: GoRouter.of(context),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
