@@ -7,10 +7,13 @@ import '../../features/vendor/orders/presentation/vendor_order_detail_screen.dar
 import '../../features/vendor/earnings/presentation/vendor_earnings_tab.dart';
 import '../../features/vendor/profile/presentation/vendor_profile_tab.dart';
 
-/// Vendor UI routes (Option 1: Bottom Tabs).
+// ✅ NEW import
+import '../../features/vendor/shops/presentation/vendor_shops_screen.dart';
+
 final List<RouteBase> vendorShellRoutes = [
   StatefulShellRoute.indexedStack(
-    builder: (context, state, navigationShell) => VendorShell(navigationShell: navigationShell),
+    builder: (context, state, navigationShell) =>
+        VendorShell(navigationShell: navigationShell),
     branches: [
       StatefulShellBranch(
         routes: [
@@ -25,7 +28,9 @@ final List<RouteBase> vendorShellRoutes = [
             routes: [
               GoRoute(
                 path: ':id',
-                builder: (context, state) => VendorOrderDetailScreen(orderId: state.pathParameters['id'] ?? ''),
+                builder: (context, state) => VendorOrderDetailScreen(
+                  orderId: state.pathParameters['id'] ?? '',
+                ),
               ),
             ],
           ),
@@ -36,6 +41,14 @@ final List<RouteBase> vendorShellRoutes = [
           GoRoute(path: '/v/earnings', builder: (context, state) => const VendorEarningsTab()),
         ],
       ),
+
+      // ✅ NEW: Shops branch BEFORE Profile
+      StatefulShellBranch(
+        routes: [
+          GoRoute(path: '/v/shops', builder: (context, state) => const VendorShopsScreen()),
+        ],
+      ),
+
       StatefulShellBranch(
         routes: [
           GoRoute(path: '/v/profile', builder: (context, state) => const VendorProfileTab()),
