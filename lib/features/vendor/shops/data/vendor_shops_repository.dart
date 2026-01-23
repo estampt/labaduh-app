@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+
 import '../domain/vendor_shop.dart';
 
 class VendorShopsRepository {
@@ -23,7 +27,6 @@ class VendorShopsRepository {
     final res = await _dio.post('/api/v1/vendors/$vendorId/shops', data: payload);
     final body = res.data;
 
-    // adjust if your store returns something else
     final shopJson = (body['data'] ?? body) as Map<String, dynamic>;
     return VendorShop.fromJson(shopJson);
   }
@@ -36,12 +39,35 @@ class VendorShopsRepository {
     final res = await _dio.put('/api/v1/vendors/$vendorId/shops/$shopId', data: payload);
     final body = res.data;
 
-
     final shopJson = (body['data'] ?? body) as Map<String, dynamic>;
     return VendorShop.fromJson(shopJson);
   }
 
   Future<void> toggle({required int vendorId, required int shopId}) async {
     await _dio.patch('/api/v1/vendors/$vendorId/shops/$shopId/toggle');
+  }
+
+  /// ✅ Single photo per shop
+  /// POST /api/v1/vendors/{vendor}/shops/{shop}/photo  (multipart)
+  Future<VendorShop> uploadPhoto({
+    required int vendorId,
+    required int shopId,
+    required File photoFile,
+  }) async {
+    final fileName = photoFile.path.split(Platform.pathSeparator).last;
+
+    final form = FormData.fromMap({
+      'photo': await MultipartFile.fromFile(photoFile.path, filename: fileName),
+    });
+
+    final res = await _dio.post(
+      '/api/v1/vendors/$vendorId/shops/$shopId/photo',
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+
+    final body = res.data;
+    final shopJson = (body['data'] ?? body) as Map<String, dynamic>;
+    return VendorShop.fromJson(shopJson);
   }
 }

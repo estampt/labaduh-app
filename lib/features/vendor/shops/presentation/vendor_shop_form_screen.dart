@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../domain/vendor_shop.dart';
-import '../state/vendor_shops_providers.dart'; 
+import '../state/vendor_shops_providers.dart';
 
 // ✅ adjust this import to your final path
 import '../../../../shared/widgets/osm_location_picker.dart';
@@ -18,7 +21,7 @@ class VendorShopFormScreen extends ConsumerStatefulWidget {
 
 class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   late final TextEditingController _name;
   late final TextEditingController _phone;
   late final TextEditingController _address1;
@@ -30,10 +33,14 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
   double? _lng;
   bool _isActive = true;
   bool _saving = false;
-  
+
   // ✅ Address + Location
   String? addressLine1;
   LatLng? pickedLatLng;
+
+  // ✅ Photo (single)
+  final ImagePicker _picker = ImagePicker();
+  File? _pickedPhoto;
 
   @override
   void initState() {
@@ -50,6 +57,12 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
     _lat = s?.latitude;
     _lng = s?.longitude;
     _isActive = s?.isActive ?? true;
+
+    // keep these for picker label/center
+    addressLine1 = s?.addressLine1;
+    if (_lat != null && _lng != null) {
+      pickedLatLng = LatLng(_lat!, _lng!);
+    }
   }
 
   @override
@@ -63,7 +76,6 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
     super.dispose();
   }
 
-  
   Future<void> _pickLocation() async {
     final res = await OSMMapLocationPicker.open(
       context,
@@ -74,11 +86,23 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
 
     setState(() {
       pickedLatLng = res.latLng;
-      addressLine1 = res.addressLabel; //'${res.latLng.latitude.toStringAsFixed(6)}, ${res.latLng.longitude.toStringAsFixed(6)}';
-      _address1.text = addressLine1!;
+
+      // ✅ DON'T use labelText; put the address into the controller.
+      // If your picker returns exactAddress, use it; otherwise use addressLabel.
+      final addr = (res.exactAddress as String?)?.trim();
+      addressLine1 = (addr != null && addr.isNotEmpty) ? addr : res.addressLabel;
+
+      _address1.text = addressLine1 ?? '';
+      _lat = pickedLatLng!.latitude;
+      _lng = pickedLatLng!.longitude;
     });
-  } 
-  
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    final x = await _picker.pickImage(source: source, imageQuality: 85);
+    if (!mounted || x == null) return;
+    setState(() => _pickedPhoto = File(x.path));
+  }
 
   Map<String, dynamic> _buildPayload() {
     return {
@@ -98,6 +122,65 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
     };
   }
 
+  Widget _photoSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Shop Photo', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+
+            if (_pickedPhoto != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  _pickedPhoto!,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              Container(
+                height: 160,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(),
+                ),
+                child: const Center(child: Text('No new photo selected')),
+              ),
+
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _pickPhoto(ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera),
+                  label: const Text('Camera'),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: () => _pickPhoto(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Gallery'),
+                ),
+                const Spacer(),
+                if (_pickedPhoto != null)
+                  TextButton(
+                    onPressed: () => setState(() => _pickedPhoto = null),
+                    child: const Text('Clear'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.editShop != null;
@@ -109,12 +192,17 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(14),
           children: [
+            // ✅ Photo first
+            _photoSection(),
+            const SizedBox(height: 12),
+
             TextFormField(
               controller: _name,
               decoration: const InputDecoration(labelText: 'Shop name'),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 10),
+
             TextFormField(
               controller: _phone,
               decoration: const InputDecoration(labelText: 'Phone'),
@@ -131,9 +219,7 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
                 suffixIcon: Icon(Icons.map_outlined),
               ),
               onTap: _pickLocation,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Select a location'
-                  : null,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Select a location' : null,
             ),
 
             const SizedBox(height: 10),
@@ -178,6 +264,7 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
                     ? null
                     : () async {
                         if (!_formKey.currentState!.validate()) return;
+
                         if (_lat == null || _lng == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Please select a location')),
@@ -188,15 +275,39 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
                         setState(() => _saving = true);
                         try {
                           final payload = _buildPayload();
+
+                          // ✅ Use your existing action/provider methods (create/update),
+                          // but we need the saved shop back to upload photo.
+                          VendorShop saved;
+
                           if (isEdit) {
-                            await ref
+                            saved = await ref
                                 .read(vendorShopsActionsProvider)
                                 .update(widget.editShop!.id, payload);
                           } else {
-                            await ref.read(vendorShopsActionsProvider).create(payload);
+                            saved = await ref.read(vendorShopsActionsProvider).create(payload);
                           }
-                          ref.invalidate(vendorShopsProvider);
-                          if (mounted) Navigator.pop(context);
+
+                          // ✅ Upload photo AFTER save (if selected)
+                          if (_pickedPhoto != null) {
+                            final vendorId = saved.vendorId; // from API object
+                            await ref
+                                .read(vendorShopsRepositoryProvider)
+                                .uploadPhoto(
+                                  vendorId: vendorId,
+                                  shopId: saved.id,
+                                  photoFile: _pickedPhoto!,
+                                );
+                          }
+
+                          await ref.refresh(vendorShopsProvider.future);
+                          if (mounted) Navigator.pop(context, true);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Save failed: $e')),
+                            );
+                          }
                         } finally {
                           if (mounted) setState(() => _saving = false);
                         }

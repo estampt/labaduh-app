@@ -25,7 +25,8 @@ dependencies:
   flutter_typeahead: ^4.4.2
   http: ^1.1.0
   intl_phone_number_input: ^0.7.5  # Add this line
-  
+  image_picker: ^1.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
