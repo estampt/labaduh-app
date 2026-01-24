@@ -16,13 +16,13 @@ final adminServiceOptionsProvider = FutureProvider.autoDispose.family<List<Servi
   final dio = ref.read(apiClientProvider).dio as Dio; // <-- adjust if needed
 
   final res = await dio.get(
-    '/api/v1/admin/services/${args.serviceId}/options',
+    '/admin/service-options',
     queryParameters: {
       'kind': args.kind.key,
       'per_page': 200,
     },
   );
-
+  
   final body = res.data;
   List list;
   if (body is Map && body['data'] is Map && (body['data']['data'] is List)) {
@@ -288,7 +288,7 @@ String _priceLabel(ServiceOptionRow o) {
 
 Future<void> _patchOption(WidgetRef ref, {required String optionId, required Map<String, dynamic> payload}) async {
   final dio = ref.read(apiClientProvider).dio as Dio; // <-- adjust if needed
-  await dio.patch('/api/v1/admin/service-options/$optionId', data: payload);
+  await dio.patch('/admin/service-options/$optionId', data: payload);
 
   // refresh services list too (if you show counts later)
   ref.invalidate(adminServicesProvider);
@@ -296,7 +296,7 @@ Future<void> _patchOption(WidgetRef ref, {required String optionId, required Map
 
 Future<void> _deleteOption(WidgetRef ref, {required String optionId}) async {
   final dio = ref.read(apiClientProvider).dio as Dio; // <-- adjust if needed
-  await dio.delete('/api/v1/admin/service-options/$optionId');
+  await dio.delete('/admin/service-options/$optionId');
   ref.invalidate(adminServicesProvider);
 }
 
@@ -448,10 +448,10 @@ class _CreateEditOptionDialogState extends ConsumerState<_CreateEditOptionDialog
               final dio = ref.read(apiClientProvider).dio as Dio; // <-- adjust if needed
 
               if (isEdit) {
-                await dio.patch('/api/v1/admin/service-options/${widget.existing!.id}', data: payload);
+                await dio.patch('/admin/service-options/${widget.existing!.id}', data: payload);
               } else {
                 await dio.post(
-                  '/api/v1/admin/services/${widget.serviceId}/options',
+                  '/admin/services/',
                   data: {
                     ...payload,
                     'kind': widget.kind.key,

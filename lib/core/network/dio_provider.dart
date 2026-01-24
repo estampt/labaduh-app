@@ -20,13 +20,28 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
+        // DEBUG: print the final resolved URL + method
+        // ignore: avoid_print
+        print('[DIO] ${options.method} ${options.uri}');
+
         final token = await tokenStorage.readToken();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+
         handler.next(options);
       },
       onError: (e, handler) {
+        // DEBUG: print useful error details
+        // ignore: avoid_print
+        print('[DIO] ERROR uri=${e.requestOptions.uri}');
+        // ignore: avoid_print
+        print('[DIO] ERROR type=${e.type} message=${e.message}');
+        // ignore: avoid_print
+        print('[DIO] ERROR status=${e.response?.statusCode}');
+        // ignore: avoid_print
+        print('[DIO] ERROR data=${e.response?.data}');
+
         handler.next(e);
       },
     ),

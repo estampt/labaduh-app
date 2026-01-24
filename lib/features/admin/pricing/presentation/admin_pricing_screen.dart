@@ -49,6 +49,13 @@ class AdminPricingScreen extends ConsumerWidget {
                 icon: const Icon(Icons.extension_outlined),
                 label: const Text('Add-ons'),
               ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/a/pricing/service-options'),
+                icon: const Icon(Icons.extension_outlined),
+                label: const Text('Service Options'),
+              ),
+              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: () => _openUpsertDialog(context, ref, initial: null),
                 icon: const Icon(Icons.add),

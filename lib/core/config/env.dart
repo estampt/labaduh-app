@@ -11,8 +11,8 @@ class Env {
     // TODO: replace with your Laravel API base URL
     // Example: https://api.labaduh.com/api/v1
     return switch (mode) {
-      EnvMode.dev => 'https://your-dev-api.com/api/v1',
-      EnvMode.prod => 'https://your-prod-api.com/api/v1',
+      EnvMode.dev => 'http://127.0.0.1:8000/api/v1',
+      EnvMode.prod => 'http://127.0.0.1:8000/api/v1',
     };
   }
 }
