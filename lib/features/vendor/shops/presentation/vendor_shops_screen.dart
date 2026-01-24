@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/vendor_shops_providers.dart';
 import 'vendor_shop_form_screen.dart';
+import '../pricing/service_options/presentation/vendor_shop_service_prices_screen.dart';
 
 class VendorShopsScreen extends ConsumerWidget {
   const VendorShopsScreen({super.key});
@@ -72,6 +73,22 @@ class VendorShopsScreen extends ConsumerWidget {
                               },
                               icon: Icon(s.isActive ? Icons.toggle_off : Icons.toggle_on),
                               label: Text(s.isActive ? 'Deactivate' : 'Activate'),
+                            ),
+                            const Spacer(),
+                            OutlinedButton.icon(
+                             onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => VendorShopServicePricesScreen(
+                                  vendorId: s.vendorId,
+                                  shopId: s.id,
+                                  shopName: s.name,
+                                ),
+
+                                ),
+                              ),
+                              icon: const Icon(Icons.price_change),
+                              label: const Text('Set Pricing'),
                             ),
                           ],
                         ),
