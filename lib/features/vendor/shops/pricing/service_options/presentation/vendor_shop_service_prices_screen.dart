@@ -99,8 +99,8 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
 
               if (items.isEmpty) {
                 return _EmptyState(
-                  title: 'No prices yet',
-                  subtitle: 'Add your first service price for this shop.',
+                  title: 'No services yet',
+                  subtitle: 'Add your first service for this shop.',
                   onAdd: () async {
                     if (!context.mounted) return;
                     await showModalBottomSheet(
@@ -165,7 +165,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                             return await showDialog<bool>(
                               context: context,
                               builder: (_) => AlertDialog(
-                                title: const Text('Delete price?'),
+                                title: const Text('Delete Service?'),
                                 content: Text('Remove pricing for “$serviceName”?'),
                                 actions: [
                                   TextButton(
@@ -556,20 +556,28 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
 
   final _minKg = TextEditingController();
   final _ratePerKg = TextEditingController();
-
-  final _blockKg = TextEditingController();
-  final _blockPrice = TextEditingController();
-
-  final _flatPrice = TextEditingController();
+  final _ratePerPiece = TextEditingController(); // ✅ per_piece support
 
   bool _isActive = true;
   bool _saving = false;
 
+  bool _overrideAllowed = true; // ✅ from services.allow_vendor_override_price
+
   bool get isEdit => widget.editRow != null;
+
+  Map<int, Map<String, dynamic>> get _serviceById {
+    final m = <int, Map<String, dynamic>>{};
+    for (final s in widget.services) {
+      final id = s['id'];
+      if (id is int) m[id] = s;
+    }
+    return m;
+  }
 
   @override
   void initState() {
     super.initState();
+
     final r = widget.editRow;
     if (r != null) {
       _serviceId = r['service_id'] as int?;
@@ -578,80 +586,105 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
 
       _minKg.text = (r['min_kg'] ?? '').toString();
       _ratePerKg.text = (r['rate_per_kg'] ?? '').toString();
-      _blockKg.text = (r['block_kg'] ?? '').toString();
-      _blockPrice.text = (r['block_price'] ?? '').toString();
-      _flatPrice.text = (r['flat_price'] ?? '').toString();
+      _ratePerPiece.text = (r['rate_per_piece'] ?? '').toString();
     }
+
+    // ✅ apply service defaults once if we have service_id (edit flow)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sid = _serviceId;
+      if (sid != null) {
+        final svc = _serviceById[sid];
+        if (svc != null) _applyServiceRules(svc, forceFill: !_overrideAllowed);
+      }
+    });
   }
 
   @override
   void dispose() {
     _minKg.dispose();
     _ratePerKg.dispose();
-    _blockKg.dispose();
-    _blockPrice.dispose();
-    _flatPrice.dispose();
+    _ratePerPiece.dispose();
     super.dispose();
   }
 
-  Future<void> _confirmDelete() async {
-    final id = widget.editRow?['id'] as int?;
-    if (id == null) return;
+  String? _n(String v) => v.trim().isEmpty ? null : v.trim();
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete price?'),
-        content: const Text('This will remove this service price from the shop.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+  // ✅ Map service defaults -> UI
+  void _applyServiceRules(Map<String, dynamic> svc, {bool forceFill = true}) {
+    final allowOverride = (svc['allow_vendor_override_price'] == null)
+        ? true
+        : (svc['allow_vendor_override_price'] == true);
 
-    if (ok != true) return;
+    // pricing model follows service.default_pricing_model (fallback base_unit)
+    final defaultModel = (svc['default_pricing_model'] ?? '').toString();
+    final baseUnit = (svc['base_unit'] ?? 'kg').toString();
+    final modelFromService = (defaultModel.isNotEmpty)
+        ? defaultModel
+        : (baseUnit == 'item' ? 'per_piece' : 'per_kg_min');
 
-    setState(() => _saving = true);
-    try {
-      await ref.read(vendorServicePricesActionsProvider).delete(
-            widget.vendorId,
-            widget.shopId,
-            id,
-          );
+    setState(() {
+      _overrideAllowed = allowOverride;
+      _model = modelFromService;
+    });
 
-      // ✅ Close ONLY the bottom sheet after successful delete
-      if (mounted) Navigator.pop(context);
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    // Prefill fields from service defaults
+    final dMinKg = svc['default_min_kg'];
+    final dRateKg = svc['default_rate_per_kg'];
+    final dRatePiece = svc['default_rate_per_piece'];
+
+    void fillIf(bool condition, TextEditingController c, dynamic val) {
+      if (!condition) return;
+      c.text = (val == null) ? '' : val.toString();
+    }
+
+    // On CREATE: always fill
+    // On EDIT: fill only if override is disabled (forceFill) OR field is empty
+    final shouldFill = forceFill || !isEdit;
+
+    if (_model == 'per_kg_min') {
+      fillIf(shouldFill || _minKg.text.trim().isEmpty, _minKg, dMinKg);
+      fillIf(shouldFill || _ratePerKg.text.trim().isEmpty, _ratePerKg, dRateKg);
+      // clear piece field (optional)
+      if (shouldFill && _ratePerPiece.text.isNotEmpty) _ratePerPiece.text = '';
+    } else {
+      // per_piece
+      if (shouldFill && _minKg.text.isNotEmpty) _minKg.text = '';
+      if (shouldFill && _ratePerKg.text.isNotEmpty) _ratePerKg.text = '';
+      fillIf(shouldFill || _ratePerPiece.text.trim().isEmpty, _ratePerPiece, dRatePiece);
     }
   }
 
-
   Map<String, dynamic> _buildPayload() {
-    String? n(String v) => v.trim().isEmpty ? null : v.trim();
-
+    // If override is disabled, ensure payload uses service defaults already set in controllers.
     return {
       'service_id': _serviceId,
       'pricing_model': _model,
-      'min_kg': n(_minKg.text),
-      'rate_per_kg': n(_ratePerKg.text),
-      'block_kg': n(_blockKg.text),
-      'block_price': n(_blockPrice.text),
-      'flat_price': n(_flatPrice.text),
+      'min_kg': _model == 'per_kg_min' ? _n(_minKg.text) : null,
+      'rate_per_kg': _model == 'per_kg_min' ? _n(_ratePerKg.text) : null,
+      'rate_per_piece': _model == 'per_piece' ? _n(_ratePerPiece.text) : null,
       'is_active': _isActive,
     };
   }
 
+  String _serviceName(Map<String, dynamic>? svc) => (svc?['name'] ?? '').toString();
+  String _fmt(dynamic v) => (v == null || (v is String && v.trim().isEmpty)) ? '—' : v.toString();
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final svc = (_serviceId == null) ? null : _serviceById[_serviceId!];
+    final svcName = _serviceName(svc);
+
+    // defaults from service
+    final dModel = (svc?['default_pricing_model'] ?? '').toString();
+    final baseUnit = (svc?['base_unit'] ?? 'kg').toString();
+    final resolvedModel = dModel.isNotEmpty ? dModel : (baseUnit == 'item' ? 'per_piece' : 'per_kg_min');
+
+    final dMinKg = _fmt(svc?['default_min_kg']);
+    final dRateKg = _fmt(svc?['default_rate_per_kg']);
+    final dRatePiece = _fmt(svc?['default_rate_per_piece']);
+
+    final overrideText = _overrideAllowed ? 'Override allowed' : 'Override disabled';
 
     return Padding(
       padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: bottom + 16),
@@ -661,7 +694,7 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // simple drag handle (no showDragHandle param)
+              // handle
               Center(
                 child: Container(
                   width: 42,
@@ -689,11 +722,12 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
+              // ✅ Service picker
               DropdownButtonFormField<int>(
                 value: _serviceId,
-                isExpanded: true, // ✅ important
+                isExpanded: true,
                 items: widget.services.map((s) {
                   final id = s['id'] as int;
                   final name = (s['name'] ?? 'Service #$id').toString();
@@ -703,18 +737,20 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
                       children: [
                         Icon(VendorShopServicePricesScreen._serviceIconForName(name), size: 18),
                         const SizedBox(width: 8),
-                        Flexible( // ✅ instead of Expanded
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        Flexible(
+                          child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
                         ),
                       ],
                     ),
                   );
                 }).toList(),
-                onChanged: isEdit ? null : (v) => setState(() => _serviceId = v),
+                onChanged: isEdit
+                    ? null
+                    : (v) {
+                        setState(() => _serviceId = v);
+                        final svc = (v == null) ? null : _serviceById[v];
+                        if (svc != null) _applyServiceRules(svc, forceFill: true);
+                      },
                 decoration: const InputDecoration(
                   labelText: 'Service',
                   prefixIcon: Icon(Icons.design_services_outlined),
@@ -724,90 +760,138 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
 
               const SizedBox(height: 12),
 
-              DropdownButtonFormField<String>(
-                value: _model,
-                items: const [
-                  DropdownMenuItem(value: 'per_kg_min', child: Text('Per KG (optional minimum KG)')),
-                  DropdownMenuItem(value: 'per_block', child: Text('Per Block (kg + block price)')),
-                  DropdownMenuItem(value: 'flat', child: Text('Flat price')),
-                ],
-                onChanged: (v) => setState(() => _model = v ?? 'per_kg_min'),
+              // ✅ Default pricing display card
+              if (svc != null)
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.info_outline, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Defaults • ${svcName.isEmpty ? 'Service' : svcName}',
+                                style: Theme.of(context).textTheme.titleSmall,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.7)),
+                              ),
+                              child: Text(overrideText),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text('Base unit: $baseUnit'),
+                        Text('Default model: $resolvedModel'),
+                        const SizedBox(height: 6),
+                        if (resolvedModel == 'per_kg_min') ...[
+                          Text('Default min kg: $dMinKg'),
+                          Text('Default rate / kg: $dRateKg'),
+                        ] else ...[
+                          Text('Default rate / piece: $dRatePiece'),
+                        ],
+                        if (!_overrideAllowed) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Override is disabled. Inputs are locked to the default pricing.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 12),
+
+              // ✅ pricing model follows service default, and vendor can’t change it
+              // (even if override is allowed, your BRD #2 says follow services_base_unit)
+              InputDecorator(
                 decoration: const InputDecoration(
                   labelText: 'Pricing model',
                   prefixIcon: Icon(Icons.tune_outlined),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_model)),
+                  ],
                 ),
               ),
 
               const SizedBox(height: 12),
 
+              // ✅ Fields: lock if override not allowed
               if (_model == 'per_kg_min') ...[
                 Row(
                   children: [
                     Expanded(
                       child: TextFormField(
                         controller: _minKg,
+                        readOnly: !_overrideAllowed,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Min KG (optional)',
+                          labelText: 'Min KG',
                           prefixIcon: Icon(Icons.scale_outlined),
                         ),
+                        validator: (v) {
+                          if (_model != 'per_kg_min') return null;
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          return null;
+                        },
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
                         controller: _ratePerKg,
+                        readOnly: !_overrideAllowed,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Rate / KG',
                           prefixIcon: Icon(Icons.payments_outlined),
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) {
+                          if (_model != 'per_kg_min') return null;
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          return null;
+                        },
                       ),
                     ),
                   ],
                 ),
               ],
 
-              if (_model == 'per_block') ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _blockKg,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Block KG',
-                          prefixIcon: Icon(Icons.inventory_2_outlined),
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _blockPrice,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Block price',
-                          prefixIcon: Icon(Icons.payments_outlined),
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-
-              if (_model == 'flat') ...[
+              if (_model == 'per_piece') ...[
                 TextFormField(
-                  controller: _flatPrice,
+                  controller: _ratePerPiece,
+                  readOnly: !_overrideAllowed,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Flat price',
-                    prefixIcon: Icon(Icons.receipt_long_outlined),
+                    labelText: 'Rate / piece',
+                    prefixIcon: Icon(Icons.payments_outlined),
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  validator: (v) {
+                    if (_model != 'per_piece') return null;
+                    if (v == null || v.trim().isEmpty) return 'Required';
+                    return null;
+                  },
                 ),
               ],
 
@@ -820,17 +904,9 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
                 secondary: Icon(_isActive ? Icons.check_circle_outline : Icons.pause_circle_outline),
               ),
 
-              
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _saving ? null : _confirmDelete,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete'),
-                ),
-              ),
               const SizedBox(height: 16),
+
+              // ✅ Save
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -838,6 +914,23 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
                       ? null
                       : () async {
                           if (!_formKey.currentState!.validate()) return;
+
+                          // extra guard: if override disabled but service defaults are null -> block
+                          if (svc != null && !_overrideAllowed) {
+                            if (_model == 'per_kg_min' &&
+                                (_minKg.text.trim().isEmpty || _ratePerKg.text.trim().isEmpty)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Service defaults are missing. Please set defaults in Services table.')),
+                              );
+                              return;
+                            }
+                            if (_model == 'per_piece' && _ratePerPiece.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Service defaults are missing. Please set defaults in Services table.')),
+                              );
+                              return;
+                            }
+                          }
 
                           setState(() => _saving = true);
                           try {
