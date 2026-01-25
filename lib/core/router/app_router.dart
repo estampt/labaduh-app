@@ -36,6 +36,9 @@ import '../../features/customer/order/presentation/order_tracking_screen.dart';
 import '../../features/customer/order/presentation/order_success_screen.dart';
 import '../../features/customer/order/presentation/order_rate_screen.dart';
 
+import '../../features/common/presentation/notifications_screen.dart';
+import '../../features/common/presentation/messages_screen.dart';
+
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -58,6 +61,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       // ✅ Landing page (default when not logged in)
       GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
+
+      // ✅ Notifications + Messenger (global)
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/messages',
+        builder: (context, state) => const MessagesScreen(),
+      ),
+
 
       // Optional manual role picker (still accessible)
       GoRoute(path: '/role', builder: (context, state) => const RoleSelectScreen()),
