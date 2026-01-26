@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'vendor_shop_option_prices_screen.dart';
 
 import '../data/vendor_service_prices_providers.dart';
 
@@ -96,7 +97,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                   serviceNameById[id] = (s['name'] ?? 'Service #$id').toString();
                 }
               }
-
+/*
               if (items.isEmpty) {
                 return _EmptyState(
                   title: 'No services yet',
@@ -115,7 +116,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                   },
                 );
               }
-
+          */
               final activeCount = items.where((e) => e['is_active'] == true).length;
 
               return RefreshIndicator(
@@ -183,87 +184,325 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                           onDismissed: (_) async {
                             await ref.read(vendorServicePricesActionsProvider).delete(vendorId, shopId, id);
                           },
-                          child: Card(
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.5)),
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              leading: CircleAvatar(child: Icon(leadingIcon)),
-                              title: Text(
-                                serviceName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    _Chip(icon: modelIcon, label: modelLabel),
-                                    _Chip(icon: Icons.payments_outlined, label: priceLabel),
-                                    _Chip(
-                                      icon: isActive
-                                          ? Icons.check_circle_outline
-                                          : Icons.pause_circle_outline,
-                                      label: isActive ? 'Active' : 'Inactive',
+                        //This is where the recursive is done
+                        child: Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                leading: CircleAvatar(child: Icon(leadingIcon)),
+                                title: Text(
+                                  serviceName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      _Chip(icon: modelIcon, label: modelLabel),
+                                      _Chip(icon: Icons.payments_outlined, label: priceLabel),
+                                      _Chip(
+                                        icon: isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                                        label: isActive ? 'Active' : 'Inactive',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                trailing: PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert),
+                                  onSelected: (v) async {
+                                    if (v == 'edit') {
+                                      if (!context.mounted) return;
+                                      await showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        builder: (_) => _ServicePriceFormSheet(
+                                          vendorId: vendorId,
+                                          shopId: shopId,
+                                          services: services,
+                                          editRow: row,
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    if (v == 'delete') {
+                                      await _deleteRow(
+                                        context,
+                                        ref,
+                                        vendorId: vendorId,
+                                        shopId: shopId,
+                                        priceId: id,
+                                        serviceName: serviceName,
+                                      );
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: ListTile(
+                                        leading: Icon(Icons.edit_outlined),
+                                        title: Text('Edit'),
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: ListTile(
+                                        leading: Icon(Icons.delete_outline),
+                                        title: Text('Delete'),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                icon: const Icon(Icons.more_vert),
-                                onSelected: (v) async {
-                                  if (v == 'edit') {
-                                    if (!context.mounted) return;
-                                    await showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      builder: (_) => _ServicePriceFormSheet(
-                                        vendorId: vendorId,
-                                        shopId: shopId,
-                                        services: services,
-                                        editRow: row,
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  if (v == 'delete') {
-                                    await _deleteRow(
-                                      context,
-                                      ref,
+                                onTap: () async {
+                                  if (!context.mounted) return;
+                                  await showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (_) => _ServicePriceFormSheet(
                                       vendorId: vendorId,
                                       shopId: shopId,
-                                      priceId: id,
-                                      serviceName: serviceName,
-                                    );
-                                  }
+                                      services: services,
+                                      editRow: row,
+                                    ),
+                                  );
                                 },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
-                                  PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete'))),
-                                ],
                               ),
 
-                              onTap: () async {
-                                if (!context.mounted) return;
-                                await showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  builder: (_) => _ServicePriceFormSheet(
-                                    vendorId: vendorId,
-                                    shopId: shopId,
-                                    services: services,
-                                    editRow: row,
+                              // ✅ CHILDREN (per record)
+                              // ✅ CHILDREN (per record)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                                child: Column(
+                                  children: [
+                                    Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                                    const SizedBox(height: 10),
+
+                                    // ✅ Option Prices list (API)
+                                    Consumer(builder: (context, ref, _) {
+                                      final key = OptionPricesKey(
+                                        vendorId: vendorId,
+                                        shopId: shopId,
+                                        vendorServicePriceId: id, // ✅ current service price record id
+                                      );
+
+                                      final async = ref.watch(vendorServiceOptionPricesProvider(key));
+                                      return async.when(
+                                        loading: () => const Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: SizedBox(
+                                            height: 18,
+                                            width: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                        error: (e, _) => Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Failed to load options: $e',
+                                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                                          ),
+                                        ),
+                                        data: (items) {
+                                          
+
+                                          return Column(
+                          children: items.map((row) {
+                            // row is VendorServiceOptionPriceLite (MODEL), not Map
+
+                            final name = row.serviceOption?.name ?? 'Option';
+                            final kind = (row.serviceOption?.kind ?? '').trim();
+                            final price = row.price?.toString() ?? '';
+                            final isActive = row.isActive;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      kind.isEmpty ? name : '$name • $kind',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
                                   ),
-                                );
-                              },
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    price.isEmpty ? '-' : price,
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Icon(
+                                    isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                                    size: 18,
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+
+                },
+              );
+            }),
+          ],
+        ),
+      ),
+      // ✅ Service Options (per service price)
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        child: Column(
+          children: [
+            Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.5)),
+            const SizedBox(height: 10),
+
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Service Options',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    if (!context.mounted) return;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => VendorShopOptionPricesScreen(
+                          vendorId: vendorId,
+                          shopId: shopId,
+                          shopName: shopName,
+                          vendorServicePriceId: id, // ✅ IMPORTANT: parent service price id
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Manage'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // ✅ quick preview list under the service price (optional but nice)
+            Builder(builder: (context) {
+              final async = ref.watch(
+                vendorShopOptionPricesProvider((
+                  vendorId: vendorId,
+                  shopId: shopId,
+                  vendorServicePriceId: id,
+                )),
+              );
+
+              return async.when(
+                loading: () => const Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+                error: (e, _) => Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Failed to load options: $e',
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+                data: (items) {
+                  if (items.isEmpty) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'No service options added.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    );
+                  }
+
+                  // Show only first few as preview
+                  final preview = items.take(3).toList();
+
+                  return Column(
+                    children: preview.map((row) {
+                      final name = row.serviceOption?.name ?? 'Option';
+                      final kind = (row.serviceOption?.kind ?? '').trim();
+                      final price = row.price?.toString() ?? '';
+                      final isActive = row.isActive;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                kind.isEmpty ? name : '$name • $kind',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Text(
+                              price.isEmpty ? '-' : price,
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(width: 10),
+                            Icon(
+                              isActive
+                                  ? Icons.check_circle_outline
+                                  : Icons.pause_circle_outline,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              );
+            }),
+          ],
+        ),
+      ),
+
+      /*
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        child: Column(
+          children: [
+            Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.5)),
+            const SizedBox(height: 10),
+
+            // Put whatever "children" you want here:
+            // Example placeholder:
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Children goes here…',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ), */
+    ],
+  ),
+),
+
                         ),
                       );
                     }).toList(),
@@ -277,7 +516,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
     );
   }
 
-  static String _priceSummary(Map<String, dynamic> row) {
+  static String _priceSummary(Map<String, dynamic> row) { 
     final model = (row['pricing_model'] ?? 'per_kg_min').toString();
     String fmt(dynamic v) => (v == null || (v is String && v.trim().isEmpty)) ? '-' : v.toString();
 

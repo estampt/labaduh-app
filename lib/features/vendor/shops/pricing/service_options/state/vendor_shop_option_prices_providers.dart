@@ -1,25 +1,28 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
-import '../data/vendor_shop_option_prices_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; 
+import '../data/vendor_shop_option_prices_repository.dart'; 
 
-// ✅ Reuse your existing Dio provider.
-// If you already have `dioProvider`, use that.
-// Otherwise, replace this provider with `ref.read(apiClientProvider).dio`.
-final dioProvider = Provider<Dio>((ref) {
-  throw UnimplementedError('Plug in your Dio instance here (reuse your existing dioProvider).');
-});
+import 'package:labaduh/core/network/dio_provider.dart'; 
 
-final vendorShopOptionPricesRepositoryProvider = Provider<VendorShopOptionPricesRepository>((ref) {
-  final dio = ref.watch(dioProvider);
+
+final vendorShopOptionPricesRepositoryProvider =
+    Provider<VendorShopOptionPricesRepository>((ref) {
+  final dio = ref.watch(dioProvider); // ✅ comes from dio_provider.dart
   return VendorShopOptionPricesRepository(dio);
 });
 
+
 final vendorShopOptionPricesProvider = FutureProvider.family<
     List<VendorServiceOptionPriceLite>,
-    ({int vendorId, int shopId})>((ref, args) async {
+    ({int vendorId, int shopId, int vendorServicePriceId})>((ref, args) async {
   final repo = ref.watch(vendorShopOptionPricesRepositoryProvider);
-  return repo.listShopOptionPrices(vendorId: args.vendorId, shopId: args.shopId);
+
+  return repo.listShopOptionPrices(
+    vendorId: args.vendorId,
+    shopId: args.shopId,
+    vendorServicePriceId: args.vendorServicePriceId, // ✅ required
+  );
 });
+
 
 final serviceOptionsProvider = FutureProvider<List<ServiceOptionLite>>((ref) async {
   final repo = ref.watch(vendorShopOptionPricesRepositoryProvider);
@@ -47,12 +50,13 @@ class VendorShopOptionPricesActions {
     await _repo.upsertShopOptionPrice(
       vendorId: vendorId,
       shopId: shopId,
+      vendorServicePriceId: serviceOptionId, // ✅ REQUIRED
       serviceOptionId: serviceOptionId,
       price: price,
       priceType: priceType,
       isActive: isActive,
     );
-    _ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId)));
+
   }
 
   Future<void> update({
@@ -71,7 +75,14 @@ class VendorShopOptionPricesActions {
       priceType: priceType,
       isActive: isActive,
     );
-    _ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId)));
+    _ref.invalidate(
+    vendorShopOptionPricesProvider((
+      vendorId: vendorId,
+      shopId: shopId,
+      vendorServicePriceId: optionPriceId, // ✅ REQUIRED
+    )),
+  );
+
   }
 
   Future<void> delete({
@@ -84,6 +95,6 @@ class VendorShopOptionPricesActions {
       shopId: shopId,
       optionPriceId: optionPriceId,
     );
-    _ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId)));
+    _ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId, vendorServicePriceId: optionPriceId)));
   }
 }

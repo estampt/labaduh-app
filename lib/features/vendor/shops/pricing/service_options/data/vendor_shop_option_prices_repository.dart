@@ -29,6 +29,7 @@ class ServiceOptionLite {
 
 class VendorServiceOptionPriceLite {
   final int id;
+  final int vendorServicePriceId;
   final int vendorId;
   final int? shopId;
   final int serviceOptionId;
@@ -41,6 +42,7 @@ class VendorServiceOptionPriceLite {
 
   VendorServiceOptionPriceLite({
     required this.id,
+    required this.vendorServicePriceId,
     required this.vendorId,
     required this.shopId,
     required this.serviceOptionId,
@@ -54,6 +56,7 @@ class VendorServiceOptionPriceLite {
     final so = j['service_option'];
     return VendorServiceOptionPriceLite(
       id: (j['id'] as num).toInt(),
+      vendorServicePriceId: (j['vendor_service_price_id'] as num?)?.toInt() ?? 0,
       vendorId: (j['vendor_id'] as num).toInt(),
       shopId: j['shop_id'] == null ? null : (j['shop_id'] as num).toInt(),
       serviceOptionId: (j['service_option_id'] as num).toInt(),
@@ -74,8 +77,16 @@ class VendorShopOptionPricesRepository {
   Future<List<VendorServiceOptionPriceLite>> listShopOptionPrices({
     required int vendorId,
     required int shopId,
+    required int vendorServicePriceId,
+    int? serviceOptionId,
   }) async {
-    final res = await _dio.get('/api/v1/vendors/$vendorId/shops/$shopId/option-prices');
+    final res = await _dio.get(
+      '/api/v1/vendors/$vendorId/shops/$shopId/option-prices',
+      queryParameters: {
+        'vendor_service_price_id': vendorServicePriceId,
+        if (serviceOptionId != null) 'service_option_id': serviceOptionId,
+      },
+    );
     final data = res.data;
 
     // Your API: { data: { data: [...] } }
@@ -87,6 +98,7 @@ class VendorShopOptionPricesRepository {
   Future<VendorServiceOptionPriceLite> upsertShopOptionPrice({
     required int vendorId,
     required int shopId,
+    required int vendorServicePriceId,
     required int serviceOptionId,
     num? price,
     String? priceType, // fixed|per_kg|per_item
@@ -95,6 +107,7 @@ class VendorShopOptionPricesRepository {
     final res = await _dio.post(
       '/api/v1/vendors/$vendorId/shops/$shopId/option-prices',
       data: {
+        'vendor_service_price_id': vendorServicePriceId,
         'service_option_id': serviceOptionId,
         if (price != null) 'price': price,
         if (priceType != null) 'price_type': priceType,

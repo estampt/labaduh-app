@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../state/vendor_shop_option_prices_providers.dart';
+import '../data/vendor_service_prices_providers.dart';
 import '../data/vendor_shop_option_prices_repository.dart';
 
 class VendorShopOptionPricesScreen extends ConsumerWidget {
@@ -9,16 +9,18 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
     required this.vendorId,
     required this.shopId,
     required this.shopName,
+    required this.vendorServicePriceId, // ✅ ADD
   });
 
   final int vendorId;
   final int shopId;
   final String shopName;
+  final int vendorServicePriceId; // ✅ ADD
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId)));
-
+    final state = ref.watch(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId, 
+        vendorServicePriceId: vendorServicePriceId)));
     return Scaffold(
       appBar: AppBar(
         title: const Text('Options & Add-ons'),
@@ -46,7 +48,7 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorState(message: e.toString(), onRetry: () {
-          ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId)));
+          ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId, vendorServicePriceId: vendorServicePriceId)));
         }),
         data: (items) {
           if (items.isEmpty) {
@@ -57,7 +59,7 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId)));
+              ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId, vendorServicePriceId: vendorServicePriceId)));
             },
             child: ListView.separated(
               padding: const EdgeInsets.all(12),
@@ -155,6 +157,7 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
       builder: (_) => _OptionPriceSheet(
         vendorId: vendorId,
         shopId: shopId,
+        vendorServicePriceId: vendorServicePriceId,
         mode: _SheetMode.add,
       ),
     );
@@ -168,6 +171,7 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
       builder: (_) => _OptionPriceSheet(
         vendorId: vendorId,
         shopId: shopId,
+        vendorServicePriceId: vendorServicePriceId,
         mode: _SheetMode.edit,
         editRow: row,
       ),
@@ -199,6 +203,7 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
       await ref.read(vendorShopOptionPricesActionsProvider).delete(
             vendorId: vendorId,
             shopId: shopId,
+            vendorServicePriceId: vendorServicePriceId,
             optionPriceId: row.id,
           );
       if (context.mounted) {
@@ -224,12 +229,14 @@ class _OptionPriceSheet extends ConsumerStatefulWidget {
   const _OptionPriceSheet({
     required this.vendorId,
     required this.shopId,
+    required this.vendorServicePriceId, // ✅ ADD THIS
     required this.mode,
     this.editRow,
   });
 
   final int vendorId;
   final int shopId;
+  final int vendorServicePriceId; // ✅ ADD THIS
   final _SheetMode mode;
   final VendorServiceOptionPriceLite? editRow;
 
@@ -266,8 +273,14 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
   @override
   Widget build(BuildContext context) {
     final optionsAsync = ref.watch(serviceOptionsProvider);
-    final existingAsync =
-        ref.watch(vendorShopOptionPricesProvider((vendorId: widget.vendorId, shopId: widget.shopId)));
+    final existingAsync = ref.watch(
+      vendorShopOptionPricesProvider((
+        vendorId: widget.vendorId,
+        shopId: widget.shopId,
+        vendorServicePriceId: widget.vendorServicePriceId, // ✅ REQUIRED
+      )),
+    );
+
 
     return SafeArea(
       child: Padding(
@@ -459,6 +472,7 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
         await actions.upsert(
           vendorId: widget.vendorId,
           shopId: widget.shopId,
+          vendorServicePriceId: widget.vendorServicePriceId,
           serviceOptionId: serviceOptionId,
           price: price,
           priceType: _priceType,
@@ -468,6 +482,7 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
         await actions.update(
           vendorId: widget.vendorId,
           shopId: widget.shopId,
+          vendorServicePriceId: widget.vendorServicePriceId,
           optionPriceId: widget.editRow!.id,
           price: price,
           priceType: _priceType,
