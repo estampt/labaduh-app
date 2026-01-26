@@ -1,5 +1,12 @@
 import 'package:dio/dio.dart';
 
+
+num? _toNum(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  return null;
+}
 class ServiceOptionLite {
   final int id;
   final String name;
@@ -22,14 +29,13 @@ class ServiceOptionLite {
         name: (j['name'] ?? '').toString(),
         kind: j['kind']?.toString(),
         priceType: j['price_type']?.toString(),
-        price: j['price'],
+        price: _toNum(j['price']),
         description: j['description']?.toString(), // ✅ parse this
       );
 }
 
 class VendorServiceOptionPriceLite {
   final int id;
-  final int vendorServicePriceId;
   final int vendorId;
   final int? shopId;
   final int serviceOptionId;
@@ -42,7 +48,6 @@ class VendorServiceOptionPriceLite {
 
   VendorServiceOptionPriceLite({
     required this.id,
-    required this.vendorServicePriceId,
     required this.vendorId,
     required this.shopId,
     required this.serviceOptionId,
@@ -56,11 +61,10 @@ class VendorServiceOptionPriceLite {
     final so = j['service_option'];
     return VendorServiceOptionPriceLite(
       id: (j['id'] as num).toInt(),
-      vendorServicePriceId: (j['vendor_service_price_id'] as num?)?.toInt() ?? 0,
       vendorId: (j['vendor_id'] as num).toInt(),
       shopId: j['shop_id'] == null ? null : (j['shop_id'] as num).toInt(),
       serviceOptionId: (j['service_option_id'] as num).toInt(),
-      price: j['price'],
+      price: _toNum(j['price']),
       priceType: j['price_type']?.toString(),
       isActive: (j['is_active'] == true),
       serviceOption: (so is Map<String, dynamic>) ? ServiceOptionLite.fromJson(so) : null,
@@ -73,12 +77,12 @@ class VendorShopOptionPricesRepository {
 
   final Dio _dio;
 
-  /// GET /vendors/{vendor}/shops/{shop}/option-prices
+  /// GET /vendors/{vendor}/shops/{shop}/option-prices?vendor_service_price_id=...
   Future<List<VendorServiceOptionPriceLite>> listShopOptionPrices({
     required int vendorId,
     required int shopId,
-    required int vendorServicePriceId,
-    int? serviceOptionId,
+    required int vendorServicePriceId, // ✅ REQUIRED
+    int? serviceOptionId,              // ✅ optional filter
   }) async {
     final res = await _dio.get(
       '/api/v1/vendors/$vendorId/shops/$shopId/option-prices',
@@ -87,19 +91,22 @@ class VendorShopOptionPricesRepository {
         if (serviceOptionId != null) 'service_option_id': serviceOptionId,
       },
     );
-    final data = res.data;
 
-    // Your API: { data: { data: [...] } }
+    final data = res.data;
     final List list = (data['data']?['data'] as List?) ?? const [];
-    return list.map((e) => VendorServiceOptionPriceLite.fromJson(Map<String, dynamic>.from(e))).toList();
+
+    return list
+        .map((e) => VendorServiceOptionPriceLite.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
+
 
   /// POST /vendors/{vendor}/shops/{shop}/option-prices  (upsert)
   Future<VendorServiceOptionPriceLite> upsertShopOptionPrice({
     required int vendorId,
     required int shopId,
-    required int vendorServicePriceId,
     required int serviceOptionId,
+    required int vendorServicePriceId,
     num? price,
     String? priceType, // fixed|per_kg|per_item
     bool? isActive,
@@ -107,7 +114,6 @@ class VendorShopOptionPricesRepository {
     final res = await _dio.post(
       '/api/v1/vendors/$vendorId/shops/$shopId/option-prices',
       data: {
-        'vendor_service_price_id': vendorServicePriceId,
         'service_option_id': serviceOptionId,
         if (price != null) 'price': price,
         if (priceType != null) 'price_type': priceType,

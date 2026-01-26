@@ -4,9 +4,10 @@ import '../state/services_repository.dart';
 import '../../../../../../core/network/api_client.dart';     
 import 'vendor_shop_option_prices_repository.dart'; 
  
+
 final vendorServicePricesRepositoryProvider =
     Provider<VendorServicePricesRepository>((ref) {
-  final api = ref.watch(apiClientProvider);
+  final api = ref.watch(apiClientProvider); // ✅ ApiClient
   return VendorServicePricesRepository(api);
 });
 
@@ -16,103 +17,6 @@ final servicesRepositoryProvider = Provider((ref) {
   final api = ref.watch(apiClientProvider);
   return ServicesRepository(api);
 });
-
-
-final serviceOptionsProvider = FutureProvider<List<ServiceOptionLite>>((ref) async {
-  final repo = ref.watch(vendorShopOptionPricesRepositoryProvider);
-  // BRD: only active options
-  return repo.listServiceOptions(onlyActive: true);
-});
-
-final vendorShopOptionPricesProvider = FutureProvider.family<
-    List<VendorServiceOptionPriceLite>,
-    ({int vendorId, int shopId, int vendorServicePriceId})>((ref, args) async {
-  final repo = ref.watch(vendorShopOptionPricesRepositoryProvider);
-  return repo.listShopOptionPrices(
-    vendorId: args.vendorId,
-    shopId: args.shopId,
-    vendorServicePriceId: args.vendorServicePriceId,
-  );
-});
-
-final vendorShopOptionPricesActionsProvider =
-    Provider<VendorShopOptionPricesActions>((ref) {
-  final repo = ref.watch(vendorShopOptionPricesRepositoryProvider);
-  return VendorShopOptionPricesActions(ref, repo);
-});
-
-class VendorShopOptionPricesActions {
-  VendorShopOptionPricesActions(this.ref, this.repo);
-
-  final Ref ref;
-  final VendorShopOptionPricesRepository repo;
-
-  void _invalidate(int vendorId, int shopId, int vendorServicePriceId) {
-    ref.invalidate(
-      vendorShopOptionPricesProvider((
-        vendorId: vendorId,
-        shopId: shopId,
-        vendorServicePriceId: vendorServicePriceId,
-      )),
-    );
-  }
-
-  Future<void> upsert({
-    required int vendorId,
-    required int shopId,
-    required int vendorServicePriceId,
-    required int serviceOptionId,
-    num? price,
-    String? priceType,
-    bool? isActive,
-  }) async {
-    await repo.upsertShopOptionPrice(
-      vendorId: vendorId,
-      shopId: shopId,
-      vendorServicePriceId: vendorServicePriceId,
-      serviceOptionId: serviceOptionId,
-      price: price,
-      priceType: priceType,
-      isActive: isActive,
-    );
-    _invalidate(vendorId, shopId, vendorServicePriceId);
-  }
-
-  Future<void> update({
-    required int vendorId,
-    required int shopId,
-    required int vendorServicePriceId,
-    required int optionPriceId,
-    num? price,
-    String? priceType,
-    bool? isActive,
-  }) async {
-    await repo.updateShopOptionPrice(
-      vendorId: vendorId,
-      shopId: shopId,
-      optionPriceId: optionPriceId,
-      price: price,
-      priceType: priceType,
-      isActive: isActive,
-    );
-    _invalidate(vendorId, shopId, vendorServicePriceId);
-  }
-
-  Future<void> delete({
-    required int vendorId,
-    required int shopId,
-    required int vendorServicePriceId,
-    required int optionPriceId,
-  }) async {
-    await repo.deleteShopOptionPrice(
-      vendorId: vendorId,
-      shopId: shopId,
-      optionPriceId: optionPriceId,
-    );
-    _invalidate(vendorId, shopId, vendorServicePriceId);
-  }
-}
-
 
 final servicesListProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final repo = ref.watch(servicesRepositoryProvider);
@@ -132,6 +36,7 @@ final vendorShopOptionPricesRepositoryProvider =
     Provider<VendorShopOptionPricesRepository>((ref) {
   final api = ref.watch(apiClientProvider);
   return VendorShopOptionPricesRepository(api.dio);
+
 });
 
  
@@ -241,6 +146,15 @@ class VendorServiceOptionPricesActions {
   }
 }
  
+
+
+// ✅ Master Service Options (from service_options table)
+// Only active options are returned.
+final serviceOptionsProvider = FutureProvider<List<ServiceOptionLite>>((ref) async {
+  final repo = ref.watch(vendorShopOptionPricesRepositoryProvider);
+  return repo.listServiceOptions(onlyActive: true);
+});
+
 class OptionPricesKey {
   const OptionPricesKey({
     required this.vendorId,
@@ -266,8 +180,8 @@ class OptionPricesKey {
 // ✅ you already have a Dio provider somewhere. Use YOUR existing one.
 /*final vendorShopOptionPricesRepositoryProvider =
     Provider<VendorShopOptionPricesRepository>((ref) {
-  final api = ref.watch(apiClientProvider);
-  return VendorShopOptionPricesRepository(api.dio);
+  final dio = ref.watch(dioProvider); // <-- replace with your real dio provider name
+  return VendorShopOptionPricesRepository(dio);
 });
 */
 

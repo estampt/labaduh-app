@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'vendor_shop_option_prices_screen.dart';
 
 import '../data/vendor_service_prices_providers.dart';
+import '../data/vendor_shop_option_prices_repository.dart';
 
 class VendorShopServicePricesScreen extends ConsumerWidget {
   const VendorShopServicePricesScreen({
@@ -97,7 +97,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                   serviceNameById[id] = (s['name'] ?? 'Service #$id').toString();
                 }
               }
-/*
+
               if (items.isEmpty) {
                 return _EmptyState(
                   title: 'No services yet',
@@ -116,7 +116,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                   },
                 );
               }
-          */
+
               final activeCount = items.where((e) => e['is_active'] == true).length;
 
               return RefreshIndicator(
@@ -313,7 +313,15 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                                           ),
                                         ),
                                         data: (items) {
-                                          
+                                          if (items.isEmpty) {
+                                            return Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                'No service options added.',
+                                                style: Theme.of(context).textTheme.bodySmall,
+                                              ),
+                                            );
+                                          }
 
                                           return Column(
                           children: items.map((row) {
@@ -358,6 +366,8 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
           ],
         ),
       ),
+
+      
       // ✅ Service Options (per service price)
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
@@ -377,34 +387,31 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                 TextButton.icon(
                   onPressed: () async {
                     if (!context.mounted) return;
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => VendorShopOptionPricesScreen(
-                          vendorId: vendorId,
-                          shopId: shopId,
-                          shopName: shopName,
-                          vendorServicePriceId: id, // ✅ IMPORTANT: parent service price id
-                        ),
+                    await showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => _OptionPriceSheet(
+                        vendorId: vendorId,
+                        shopId: shopId,
+                        vendorServicePriceId: id, // ✅ parent service price id
+                        mode: _SheetMode.add,
                       ),
                     );
                   },
                   icon: const Icon(Icons.add),
-                  label: const Text('Manage'),
+                  label: const Text('Add'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
-            // ✅ quick preview list under the service price (optional but nice)
             Builder(builder: (context) {
-              final async = ref.watch(
-                vendorShopOptionPricesProvider((
-                  vendorId: vendorId,
-                  shopId: shopId,
-                  vendorServicePriceId: id,
-                )),
+              final key = OptionPricesKey(
+                vendorId: vendorId,
+                shopId: shopId,
+                vendorServicePriceId: id,
               );
+              final async = ref.watch(vendorServiceOptionPricesProvider(key));
 
               return async.when(
                 loading: () => const Align(
@@ -433,7 +440,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                     );
                   }
 
-                  // Show only first few as preview
+                  // Show a short preview (first 3). Use "Add" to manage more.
                   final preview = items.take(3).toList();
 
                   return Column(
@@ -460,12 +467,76 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                               price.isEmpty ? '-' : price,
                               style: const TextStyle(fontWeight: FontWeight.w700),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             Icon(
-                              isActive
-                                  ? Icons.check_circle_outline
-                                  : Icons.pause_circle_outline,
+                              isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
                               size: 18,
+                            ),
+                            const SizedBox(width: 2),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 18),
+                              onSelected: (v) async {
+                                if (v == 'edit') {
+                                  if (!context.mounted) return;
+                                  await showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (_) => _OptionPriceSheet(
+                                      vendorId: vendorId,
+                                      shopId: shopId,
+                                      vendorServicePriceId: id,
+                                      mode: _SheetMode.edit,
+                                      editRow: row,
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                if (v == 'delete') {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text('Delete Option?'),
+                                      content: Text('Remove “$name” from this service?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text('Delete'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (ok != true) return;
+
+                                  await ref.read(vendorServiceOptionPricesActionsProvider).delete(
+                                        vendorId: vendorId,
+                                        shopId: shopId,
+                                        vendorServicePriceId: id,
+                                        optionPriceId: row.id,
+                                      );
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: ListTile(
+                                    leading: Icon(Icons.edit_outlined),
+                                    title: Text('Edit'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline),
+                                    title: Text('Delete'),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -479,26 +550,6 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
         ),
       ),
 
-      /*
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: Column(
-          children: [
-            Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.5)),
-            const SizedBox(height: 10),
-
-            // Put whatever "children" you want here:
-            // Example placeholder:
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Children goes here…',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      ), */
     ],
   ),
 ),
@@ -1195,6 +1246,306 @@ class _ServicePriceFormSheetState extends ConsumerState<_ServicePriceFormSheet> 
           ),
         ),
       ),
+    );
+  }
+}
+
+enum _SheetMode { add, edit }
+
+class _OptionPriceSheet extends ConsumerStatefulWidget {
+  const _OptionPriceSheet({
+    required this.vendorId,
+    required this.shopId,
+    required this.vendorServicePriceId,
+    required this.mode,
+    this.editRow,
+  });
+
+  final int vendorId;
+  final int shopId;
+  final int vendorServicePriceId;
+  final _SheetMode mode;
+  final VendorServiceOptionPriceLite? editRow;
+
+  @override
+  ConsumerState<_OptionPriceSheet> createState() => _OptionPriceSheetState();
+}
+
+class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _priceCtrl = TextEditingController();
+
+  ServiceOptionLite? _selectedOption;
+  String? _priceType; // fixed|per_kg|per_item
+  bool _isActive = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mode == _SheetMode.edit && widget.editRow != null) {
+      _isActive = widget.editRow!.isActive;
+      _priceType = widget.editRow!.priceType;
+      if (widget.editRow!.price != null) _priceCtrl.text = widget.editRow!.price!.toString();
+      _selectedOption = widget.editRow!.serviceOption;
+    }
+  }
+
+  @override
+  void dispose() {
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final optionsAsync = ref.watch(serviceOptionsProvider);
+    final existingAsync = ref.watch(
+      vendorServiceOptionPricesProvider(
+        OptionPricesKey(
+          vendorId: widget.vendorId,
+          shopId: widget.shopId,
+          vendorServicePriceId: widget.vendorServicePriceId,
+        ),
+      ),
+    );
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 8,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(widget.mode == _SheetMode.add ? Icons.add_circle_outline : Icons.edit_outlined),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.mode == _SheetMode.add ? 'Add Option / Add-on' : 'Edit Option Price',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  // Picker
+                  optionsAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: LinearProgressIndicator(),
+                    ),
+                    error: (e, _) => Text('Failed to load options: $e'),
+                    data: (allOptions) {
+                      return existingAsync.when(
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => _buildOptionDropdown(context, allOptions, const []),
+                        data: (existingRows) {
+                          // hide already added options (only for ADD mode)
+                          final usedIds = existingRows.map((e) => e.serviceOptionId).toSet();
+                          final filtered = (widget.mode == _SheetMode.add)
+                              ? allOptions.where((o) => !usedIds.contains(o.id)).toList()
+                              : allOptions;
+
+                          return _buildOptionDropdown(context, filtered, existingRows);
+                        },
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Price
+                  TextFormField(
+                    controller: _priceCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Override Price (optional)',
+                      hintText: 'Leave empty to use default from service_options',
+                      prefixIcon: Icon(Icons.payments_outlined),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Price type override
+                  DropdownButtonFormField<String>(
+                    value: _priceType,
+                    items: const [
+                      DropdownMenuItem(value: 'fixed', child: Text('fixed')),
+                      DropdownMenuItem(value: 'per_kg', child: Text('per_kg')),
+                      DropdownMenuItem(value: 'per_item', child: Text('per_item')),
+                    ],
+                    onChanged: (v) => setState(() => _priceType = v),
+                    decoration: const InputDecoration(
+                      labelText: 'Override Price Type (optional)',
+                      prefixIcon: Icon(Icons.straighten_outlined),
+                      hintText: 'Leave empty to use default price_type',
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  SwitchListTile.adaptive(
+                    value: _isActive,
+                    onChanged: (v) => setState(() => _isActive = v),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Active'),
+                    subtitle: const Text('If off, this option won’t be selectable by customers.'),
+                    secondary: const Icon(Icons.toggle_on_outlined),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: Icon(_saving ? Icons.hourglass_top : Icons.save_outlined),
+                      label: Text(_saving ? 'Saving...' : 'Save'),
+                      onPressed: _saving ? null : () => _save(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionDropdown(
+    BuildContext context,
+    List<ServiceOptionLite> options,
+    List<VendorServiceOptionPriceLite> existingRows,
+  ) {
+    final isEdit = widget.mode == _SheetMode.edit;
+
+    // Ensure selection exists in edit mode even if options list is filtered
+    final merged = [...options];
+    if (isEdit && _selectedOption != null && merged.every((o) => o.id != _selectedOption!.id)) {
+      merged.insert(0, _selectedOption!);
+    }
+
+    return DropdownButtonFormField<int>(
+      value: _selectedOption?.id,
+      items: merged.map((o) {
+        final kind = (o.kind ?? '').toLowerCase();
+        final icon = kind == 'addon' ? Icons.add_circle_outline : Icons.tune;
+        return DropdownMenuItem(
+          value: o.id,
+          child: Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Text(o.name, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 8),
+              if ((o.kind ?? '').isNotEmpty) _MiniChip(text: o.kind!),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: isEdit
+          ? null
+          : (id) {
+              if (id == null) return;
+              final opt = merged.firstWhere((x) => x.id == id);
+              setState(() {
+                _selectedOption = opt;
+                // prefill helpful defaults for vendor:
+                _priceType ??= opt.priceType;
+                if (_priceCtrl.text.trim().isEmpty && opt.price != null) {
+                  _priceCtrl.text = opt.price!.toString();
+                }
+              });
+            },
+      validator: (v) {
+        if (isEdit) return null;
+        if (v == null) return 'Please select an option/add-on';
+        return null;
+      },
+      decoration: const InputDecoration(
+        labelText: 'Select Option / Add-on',
+        prefixIcon: Icon(Icons.list_alt_outlined),
+      ),
+    );
+  }
+
+  Future<void> _save(BuildContext context) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    // for edit mode, service_option_id cannot change
+    final serviceOptionId = widget.mode == _SheetMode.edit
+        ? widget.editRow!.serviceOptionId
+        : _selectedOption!.id;
+
+    final priceText = _priceCtrl.text.trim();
+    final num? price = priceText.isEmpty ? null : num.tryParse(priceText);
+
+    setState(() => _saving = true);
+    try {
+      final actions = ref.read(vendorServiceOptionPricesActionsProvider);
+
+      if (widget.mode == _SheetMode.add) {
+        await actions.upsert(
+          vendorId: widget.vendorId,
+          shopId: widget.shopId,
+          vendorServicePriceId: widget.vendorServicePriceId,
+          serviceOptionId: serviceOptionId,
+          price: price,
+          priceType: _priceType,
+          isActive: _isActive,
+        );
+      } else {
+        await actions.update(
+          vendorId: widget.vendorId,
+          shopId: widget.shopId,
+          vendorServicePriceId: widget.vendorServicePriceId,
+          optionPriceId: widget.editRow!.id,
+          price: price,
+          priceType: _priceType,
+          isActive: _isActive,
+        );
+      }
+
+      if (mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved.')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  const _MiniChip({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Text(text, style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }
