@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class CustomerShell extends StatelessWidget {
+// ✅ import your providers
+import '../../../../features/notification/state/notifications_providers.dart'; 
+
+class CustomerShell extends ConsumerWidget {
   const CustomerShell({super.key, required this.navigationShell});
   final StatefulNavigationShell navigationShell;
 
@@ -26,10 +30,6 @@ class CustomerShell extends StatelessWidget {
         return 'Labaduh';
     }
   }
-
-  // Placeholder badges (wire to providers later)
-  static const int _notifCount = 3;
-  static const int _msgCount = 1;
 
   Widget _badgeIcon(IconData icon, {required int count, String? semanticLabel}) {
     final show = count > 0;
@@ -64,20 +64,26 @@ class CustomerShell extends StatelessWidget {
   }
 
   Widget _logo() {
-  return SizedBox(
-    height: 28,          // ideal appbar logo height
-    width: 170,          // cap width so it won't hit 🔔💬
-    child: Image.asset(
-      'assets/branding/labaduh_logo.png', // <-- change if your path is different
-      fit: BoxFit.contain,
-      alignment: Alignment.centerLeft,
-    ),
-  );
-}
-
+    return SizedBox(
+      height: 28,
+      width: 170,
+      child: Image.asset(
+        'assets/branding/labaduh_logo.png',
+        fit: BoxFit.contain,
+        alignment: Alignment.centerLeft,
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // ✅ real badge counts from API (ops + chat)
+    final notifCountAsync = ref.watch(notificationsUnreadCountProvider('ops'));
+    final msgCountAsync = ref.watch(notificationsUnreadCountProvider('chat'));
+
+    final notifCount = notifCountAsync.maybeWhen(data: (v) => v, orElse: () => 0);
+    final msgCount = msgCountAsync.maybeWhen(data: (v) => v, orElse: () => 0);
+
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 12,
@@ -91,20 +97,20 @@ class CustomerShell extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'Notifications',
-            onPressed: () => context.push('/notifications'),
+            onPressed: () => context.push('/notifications'), // ✅ ops list screen route
             icon: _badgeIcon(
               Icons.notifications_none,
-              count: _notifCount,
+              count: notifCount,
               semanticLabel: 'Notifications',
             ),
           ),
           IconButton(
-            tooltip: 'Messages',
-            onPressed: () => context.push('/messages'),
+            tooltip: 'Inbox',
+            onPressed: () => context.push('/messages'), // ✅ chat list screen route (rename later if you want)
             icon: _badgeIcon(
               Icons.chat_bubble_outline,
-              count: _msgCount,
-              semanticLabel: 'Messages',
+              count: msgCount,
+              semanticLabel: 'Inbox',
             ),
           ),
           const SizedBox(width: 6),
@@ -115,22 +121,10 @@ class CustomerShell extends StatelessWidget {
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: _onTap,
         destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home'),
-          NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long),
-              label: 'Orders'),
-          NavigationDestination(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              selectedIcon: Icon(Icons.account_balance_wallet),
-              label: 'Wallet'),
-          NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile'),
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Orders'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Wallet'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );

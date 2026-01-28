@@ -36,8 +36,9 @@ import '../../features/customer/order/presentation/order_tracking_screen.dart';
 import '../../features/customer/order/presentation/order_success_screen.dart';
 import '../../features/customer/order/presentation/order_rate_screen.dart';
 
-import '../../features/common/presentation/notifications_screen.dart';
-import '../../features/common/presentation/messages_screen.dart';
+
+import '../../features/notification/presentation/inbox_alerts_screen.dart';
+import '../../features/notification/presentation/ops_notifications_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -66,12 +67,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,
         path: '/notifications',
-        builder: (context, state) => const NotificationsScreen(),
+        builder: (context, state) => const OpsNotificationsScreen(),
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,
         path: '/messages',
-        builder: (context, state) => const MessagesScreen(),
+        builder: (context, state) => const InboxAlertsScreen(),
       ),
 
 

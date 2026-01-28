@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/vendor_service_prices_providers.dart';
 import '../data/vendor_shop_option_prices_repository.dart';
@@ -51,12 +52,7 @@ class VendorShopOptionPricesScreen extends ConsumerWidget {
           ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId, vendorServicePriceId: vendorServicePriceId)));
         }),
         data: (items) {
-          if (items.isEmpty) {
-            return _EmptyState(
-              onAdd: () => _openAddSheet(context, ref),
-            );
-          }
-
+           
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(vendorShopOptionPricesProvider((vendorId: vendorId, shopId: shopId, vendorServicePriceId: vendorServicePriceId)));
@@ -313,7 +309,7 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
               child: Column(
                 children: [
                   // Picker
-                  optionsAsync.when(
+                  optionsAsync.when( 
                     loading: () => const Padding(
                       padding: EdgeInsets.all(12),
                       child: LinearProgressIndicator(),
@@ -338,16 +334,31 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
 
                   const SizedBox(height: 12),
 
-                  // Price
-                  TextFormField(
-                    controller: _priceCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Override Price (optional)',
-                      hintText: 'Leave empty to use default from service_options',
-                      prefixIcon: Icon(Icons.payments_outlined),
-                    ),
-                  ),
+                  // Price (float)
+              TextFormField(
+                controller: _priceCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: false,
+                ),
+                inputFormatters: [
+                  // allow digits + single decimal point
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Override Price (optional)',
+                  hintText: 'e.g. 2.50',
+                  prefixIcon: Icon(Icons.payments_outlined),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null; // optional
+                  final n = num.tryParse(v);
+                  if (n == null) return 'Enter a valid number';
+                  if (n < 0) return 'Price cannot be negative';
+                  return null;
+                },
+              ),
+
 
                   const SizedBox(height: 12),
 
@@ -409,22 +420,38 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
     if (isEdit && _selectedOption != null && merged.every((o) => o.id != _selectedOption!.id)) {
       merged.insert(0, _selectedOption!);
     }
-
+    
     return DropdownButtonFormField<int>(
       value: _selectedOption?.id,
+      isExpanded: true, // ✅ prevents tight width issues / overflow
       items: merged.map((o) {
         final kind = (o.kind ?? '').toLowerCase();
         final icon = kind == 'addon' ? Icons.add_circle_outline : Icons.tune;
-        return DropdownMenuItem(
+
+        return DropdownMenuItem<int>(
           value: o.id,
-          child: Row(
-            children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 10),
-              Expanded(child: Text(o.name, overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 8),
-              if ((o.kind ?? '').isNotEmpty) _MiniChip(text: o.kind!),
-            ],
+          child: SizedBox(
+            width: double.infinity, // ✅ gives the row a real width
+            child: Row(
+              children: [
+                Icon(icon, size: 18),
+                const SizedBox(width: 10),
+
+                // ✅ Use Flexible instead of Expanded inside DropdownMenuItem
+                Flexible(
+                  child: Text(
+                    o.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+                if ((o.kind ?? '').isNotEmpty) ...[
+                  _MiniChip(text: o.kind!),
+                ],
+              ],
+            ),
           ),
         );
       }).toList(),
@@ -451,6 +478,8 @@ class _OptionPriceSheetState extends ConsumerState<_OptionPriceSheet> {
         prefixIcon: Icon(Icons.list_alt_outlined),
       ),
     );
+
+
   }
 
   Future<void> _save(BuildContext context) async {

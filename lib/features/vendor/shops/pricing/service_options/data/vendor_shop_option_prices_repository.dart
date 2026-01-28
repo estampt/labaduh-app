@@ -1,5 +1,12 @@
 import 'package:dio/dio.dart';
 
+num? _toNum(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  return null;
+}
+
 class ServiceOptionLite {
   final int id;
   final String name;
@@ -22,9 +29,10 @@ class ServiceOptionLite {
         name: (j['name'] ?? '').toString(),
         kind: j['kind']?.toString(),
         priceType: j['price_type']?.toString(),
-        price: j['price'],
+        price: _toNum(j['price']),
         description: j['description']?.toString(), // ✅ parse this
       );
+  
 }
 
 class VendorServiceOptionPriceLite {
@@ -60,7 +68,7 @@ class VendorServiceOptionPriceLite {
       vendorId: (j['vendor_id'] as num).toInt(),
       shopId: j['shop_id'] == null ? null : (j['shop_id'] as num).toInt(),
       serviceOptionId: (j['service_option_id'] as num).toInt(),
-      price: j['price'],
+      price: _toNum(j['price']),
       priceType: j['price_type']?.toString(),
       isActive: (j['is_active'] == true),
       serviceOption: (so is Map<String, dynamic>) ? ServiceOptionLite.fromJson(so) : null,
