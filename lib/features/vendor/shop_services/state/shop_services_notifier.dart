@@ -105,4 +105,34 @@ class ShopServicesNotifier extends StateNotifier<AsyncValue<List<ShopServiceDto>
     if (an != 0) return an;
     return a.id.compareTo(b.id);
   }
+
+  Future<ShopServiceDto> toggleActive(ShopServiceDto s) async {
+  // Backend often validates required fields on update,
+  // so we send the FULL payload (same as edit) + flipped is_active.
+  final payload = <String, dynamic>{
+    'service_id': s.serviceId,
+    'pricing_model': s.pricingModel,
+    'uom': s.uom,
+    'minimum': s.minimum == null || s.minimum!.toString().trim().isEmpty
+        ? null
+        : num.tryParse(s.minimum!.toString()),
+    'min_price': s.minPrice == null || s.minPrice!.toString().trim().isEmpty
+        ? null
+        : num.tryParse(s.minPrice!.toString()),
+    'price_per_uom': s.pricePerUom == null || s.pricePerUom!.toString().trim().isEmpty
+        ? null
+        : num.tryParse(s.pricePerUom!.toString()),
+    'currency': s.currency,
+    'sort_order': s.sortOrder,
+    'is_active': !s.isActive,
+  }..removeWhere((k, v) => v == null);
+
+  // Reuse existing update() so state refresh stays consistent
+  return update(s.id, payload);
 }
+
+  
+  
+}
+
+

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:flutter/services.dart';
 import '../state/shop_services_notifier.dart';
 import '../data/shop_services_dtos.dart';
 import 'shop_service_options_screen.dart';  
@@ -163,12 +163,61 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                       _Chip(icon: modelIcon, label: modelLabel),
                                       _Chip(icon: Icons.scale_outlined, label: 'uom ${r.uom}'),
                                       _Chip(icon: Icons.payments_outlined, label: priceLabel),
-                                      _Chip(
-                                        icon: r.isActive
-                                            ? Icons.check_circle_outline
-                                            : Icons.pause_circle_outline,
-                                        label: r.isActive ? 'Active' : 'Inactive',
+                                        GestureDetector(
+                                        onTap: () async {
+                                          HapticFeedback.lightImpact();
+                                          await ref.read(shopServicesProvider.notifier).toggleActive(r);
+                                        },
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 200),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: r.isActive
+                                                ? Colors.green.withOpacity(0.12)
+                                                : Colors.grey.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: r.isActive ? Colors.green : Colors.grey,
+                                            ),
+                                          ),
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(20),
+                                            onTap: () async {
+                                              try {
+                                                await ref.read(shopServicesProvider.notifier).toggleActive(r);
+                                              } catch (e) {
+                                                if (!context.mounted) return;
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Failed to update status: $e')),
+                                                );
+                                              }
+                                            },
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    r.isActive ? Icons.toggle_on : Icons.toggle_off,
+                                                    size: 18,
+                                                    color: r.isActive ? Colors.green : Colors.grey,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    r.isActive ? 'Active' : 'Inactive',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w600,
+                                                      color: r.isActive ? Colors.green : Colors.grey,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+
+                                        ),
                                       ),
+
                                     ],
                                   ),
                                 ),
