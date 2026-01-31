@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/shop_services_notifier.dart';
 import '../data/shop_services_dtos.dart';
-//import 'shop_service_options_screen.dart'; // if already created; else comment for now
-
+import 'shop_service_options_screen.dart';  
 class ShopServicesScreen extends ConsumerStatefulWidget {
   const ShopServicesScreen({
     super.key,
@@ -63,12 +62,9 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
         label: const Text('Add Service'),
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Next step: Add Service CRUD')),
-          );
-        },
+        onPressed: () => _openAddServiceSheet(context, ref),
       ),
+
 
       body: asyncRows.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -113,6 +109,10 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                       child: Dismissible(
                         key: ValueKey('shop_service_${r.id}'),
                         direction: DismissDirection.endToStart,
+
+                        // 🔒 CRITICAL: prevent route glitches
+                        resizeDuration: null,
+
                         background: Container(
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 16),
@@ -122,24 +122,32 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                           ),
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
+
                         confirmDismiss: (_) async {
-                          // UI only for now
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Next step: Delete CRUD')),
-                          );
+                          final ok = await _confirmDelete(context, serviceName);
+                          if (ok != true) return false;
+
+                          await ref.read(shopServicesProvider.notifier).delete(r.id);
+
+                          // 🔒 Always return false
+                          // Let Riverpod state change remove the item safely
                           return false;
                         },
+
                         child: Card(
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                            side: BorderSide(
+                              color: Theme.of(context).dividerColor.withOpacity(0.5),
+                            ),
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                 leading: CircleAvatar(child: Icon(leadingIcon)),
                                 title: Text(
                                   serviceName,
@@ -166,10 +174,17 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                 ),
                                 trailing: PopupMenuButton<String>(
                                   icon: const Icon(Icons.more_vert),
-                                  onSelected: (v) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Next step: $v CRUD')),
-                                    );
+                                  onSelected: (v) async {
+                                    if (v == 'edit') {
+                                      await _openEditServiceSheet(context, ref, r);
+                                    } else if (v == 'delete') {
+                                      final ok = await _confirmDelete(context, serviceName);
+                                      if (ok == true) {
+                                        await ref
+                                            .read(shopServicesProvider.notifier)
+                                            .delete(r.id);
+                                      }
+                                    }
                                   },
                                   itemBuilder: (context) => const [
                                     PopupMenuItem(
@@ -190,12 +205,15 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                 ),
                               ),
 
-                              // Child section like your attached screen
+                              // Child section
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                                 child: Column(
                                   children: [
-                                    Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                                    Divider(
+                                      height: 1,
+                                      color: Theme.of(context).dividerColor.withOpacity(0.5),
+                                    ),
                                     const SizedBox(height: 10),
                                     Row(
                                       children: [
@@ -207,9 +225,6 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                         ),
                                         TextButton.icon(
                                           onPressed: () async {
-                                            // If you already created options screen, use this.
-                                            // Otherwise comment this block for now.
-                                            /*
                                             await Navigator.push(
                                               context,
                                               MaterialPageRoute(
@@ -219,21 +234,53 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                                   shopService: r,
                                                 ),
                                               ),
-                                            );  */
+                                            );
                                           },
                                           icon: const Icon(Icons.add),
                                           label: const Text('Manage'),
                                         ),
+
                                       ],
                                     ),
                                     const SizedBox(height: 6),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        'Tap Manage to add options (Rush Service, Same Day, etc).',
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                    if ((r.options).isEmpty)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          'No add-ons yet. Tap Manage to add.',
+                                          style: Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      )
+                                    else
+                                      Column(
+                                        children: (List.of(r.options)..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)))
+                                            .map((o) {
+                                          final optionName = o.serviceOption?.name ?? 'Option #${o.serviceOptionId}';
+                                          return Padding(
+                                            padding: const EdgeInsets.only(top: 8),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    optionName,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Text('S\$${o.price}'),
+                                                const SizedBox(width: 10),
+                                                Icon(
+                                                  o.isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                                                  size: 18,
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }).toList(),
                                       ),
-                                    ),
+
                                   ],
                                 ),
                               ),
@@ -241,7 +288,8 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                           ),
                         ),
                       ),
-                    );
+
+                      );
                   }).toList(),
               ],
             ),
@@ -459,6 +507,317 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 6),
             Text(message, textAlign: TextAlign.center),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+Future<bool?> _confirmDelete(BuildContext context, String name) {
+  return showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete service?'),
+      content: Text('Delete "$name" from this shop?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+}
+
+
+Future<void> _openAddServiceSheet(BuildContext context, WidgetRef ref) async {
+  final master = await ref.read(masterServicesProvider.future);
+  final existing = ref.read(shopServicesProvider).valueOrNull ?? [];
+  final usedIds = existing.map((e) => e.serviceId).toSet();
+
+  final available = master.where((s) => !usedIds.contains(s.id)).toList();
+  if (available.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All services already added for this shop.')),
+      );
+    }
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => _ShopServiceCrudSheet(
+      title: 'Add Service',
+      services: available,
+      initial: null,
+      onSave: (payload) async {
+        await ref.read(shopServicesProvider.notifier).create(payload);
+        if (context.mounted) Navigator.pop(context);
+      },
+    ),
+  );
+}
+
+Future<void> _openEditServiceSheet(BuildContext context, WidgetRef ref, ShopServiceDto row) async {
+  // lock service selection on edit; keep current service name
+  final currentService = row.service ?? ServiceDto(id: row.serviceId, name: 'Service',  isActive: true);  
+
+  if (!context.mounted) return;
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => _ShopServiceCrudSheet(
+      title: 'Edit Service',
+      services: [currentService],
+      initial: row,
+      isEdit: true,
+      onSave: (payload) async {
+        try {
+          await ref.read(shopServicesProvider.notifier).update(row.id, payload);
+          if (context.mounted) Navigator.pop(context);
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString())),
+            );
+          }
+        }
+      },
+
+    ),
+  );
+}
+
+
+class _ShopServiceCrudSheet extends StatefulWidget {
+  const _ShopServiceCrudSheet({
+    required this.title,
+    required this.services,
+    required this.initial,
+    required this.onSave,
+    this.isEdit = false,
+  });
+
+  final String title;
+  final List<ServiceDto> services;
+  final ShopServiceDto? initial;
+  final bool isEdit;
+  final Future<void> Function(Map<String, dynamic> payload) onSave;
+
+  @override
+  State<_ShopServiceCrudSheet> createState() => _ShopServiceCrudSheetState();
+}
+
+class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
+  final _formKey = GlobalKey<FormState>();
+
+  ServiceDto? _selected;
+
+  final _pricingModelCtrl = TextEditingController();
+  final _uomCtrl = TextEditingController();
+  final _minimumCtrl = TextEditingController();
+  final _minPriceCtrl = TextEditingController();
+  final _ppuCtrl = TextEditingController();
+  final _currencyCtrl = TextEditingController();
+  final _sortCtrl = TextEditingController();
+  bool _active = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.services.first;
+
+    if (widget.initial == null) {
+      // defaults for create
+      _pricingModelCtrl.text = 'tiered_min_plus';
+      _uomCtrl.text = (_selected?.baseUnit ?? 'kg');
+      _currencyCtrl.text = 'SGD';
+      _sortCtrl.text = '0';
+      _active = true;
+    } else {
+      final r = widget.initial!;
+      _pricingModelCtrl.text = r.pricingModel;
+      _uomCtrl.text = r.uom;
+      _minimumCtrl.text = r.minimum ?? '';
+      _minPriceCtrl.text = r.minPrice ?? '';
+      _ppuCtrl.text = r.pricePerUom ?? '';
+      _currencyCtrl.text = r.currency;
+      _sortCtrl.text = r.sortOrder.toString();
+      _active = r.isActive;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pricingModelCtrl.dispose();
+    _uomCtrl.dispose();
+    _minimumCtrl.dispose();
+    _minPriceCtrl.dispose();
+    _ppuCtrl.dispose();
+    _currencyCtrl.dispose();
+    _sortCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomPad),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                ),
+                const SizedBox(height: 12),
+
+                DropdownButtonFormField<int>(
+                  value: _selected?.id,
+                  items: widget.services
+                      .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+                      .toList(),
+                  onChanged: widget.isEdit
+                      ? null
+                      : (id) {
+                          final s = widget.services.firstWhere((x) => x.id == id);
+                          setState(() {
+                            _selected = s;
+                            // sensible defaults
+                            if (_uomCtrl.text.trim().isEmpty) _uomCtrl.text = s.baseUnit ?? 'kg';
+                          });
+                        },
+                  decoration: const InputDecoration(labelText: 'Service'),
+                ),
+                const SizedBox(height: 10),
+
+                TextFormField(
+                  controller: _pricingModelCtrl,
+                  decoration: const InputDecoration(labelText: 'pricing_model'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 10),
+
+                TextFormField(
+                  controller: _uomCtrl,
+                  decoration: const InputDecoration(labelText: 'uom'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 10),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _minimumCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'minimum'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _minPriceCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'min_price'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                TextFormField(
+                  controller: _ppuCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'price_per_uom'),
+                ),
+                const SizedBox(height: 10),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _currencyCtrl,
+                        decoration: const InputDecoration(labelText: 'currency'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _sortCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'sort_order'),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Active'),
+                  value: _active,
+                  onChanged: (v) => setState(() => _active = v),
+                ),
+
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () async {
+                      if (!_formKey.currentState!.validate()) return;
+
+                      final payload = <String, dynamic>{
+                        // ✅ Always send service_id (backend may require it even for edit)
+                        'service_id': widget.initial?.serviceId ?? _selected!.id,
+
+                        'pricing_model': _pricingModelCtrl.text.trim(),
+                        'uom': _uomCtrl.text.trim(),
+
+                        'minimum': _minimumCtrl.text.trim().isEmpty
+                            ? null
+                            : num.tryParse(_minimumCtrl.text.trim()),
+
+                        'min_price': _minPriceCtrl.text.trim().isEmpty
+                            ? null
+                            : num.tryParse(_minPriceCtrl.text.trim()),
+
+                        'price_per_uom': _ppuCtrl.text.trim().isEmpty
+                            ? null
+                            : num.tryParse(_ppuCtrl.text.trim()),
+
+                        'currency': _currencyCtrl.text.trim().isEmpty
+                            ? 'SGD'
+                            : _currencyCtrl.text.trim(),
+
+                        'sort_order': int.tryParse(_sortCtrl.text.trim()) ?? 0,
+                        'is_active': _active,
+                      }..removeWhere((k, v) => v == null);
+
+
+                      await widget.onSave(payload);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
