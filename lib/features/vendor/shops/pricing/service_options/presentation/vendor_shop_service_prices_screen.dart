@@ -97,27 +97,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                   serviceNameById[id] = (s['name'] ?? 'Service #$id').toString();
                 }
               }
-/*
-              if (items.isEmpty) {
-                return _EmptyState(
-                  title: 'No services yet',
-                  subtitle: 'Add your first service for this shop.',
-                  onAdd: () async {
-                    if (!context.mounted) return;
-                    await showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => _ServicePriceFormSheet(
-                        vendorId: vendorId,
-                        shopId: shopId,
-                        services: services,
-                      ),
-                    );
-                  },
-                );
-              }
-          */
-              final activeCount = items.where((e) => e['is_active'] == true).length;
+               final activeCount = items.where((e) => e['is_active'] == true).length;
 
               return RefreshIndicator(
                 onRefresh: () async => ref.invalidate(
@@ -277,88 +257,7 @@ class VendorShopServicePricesScreen extends ConsumerWidget {
                                   );
                                 },
                               ),
-
-                              // ✅ CHILDREN (per record)
-                              // ✅ CHILDREN (per record)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                                child: Column(
-                                  children: [
-                                    Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.5)),
-                                    const SizedBox(height: 10),
-
-                                    // ✅ Option Prices list (API)
-                                    Consumer(builder: (context, ref, _) {
-                                      final key = OptionPricesKey(
-                                        vendorId: vendorId,
-                                        shopId: shopId,
-                                        vendorServicePriceId: id, // ✅ current service price record id
-                                      );
-
-                                      final async = ref.watch(vendorServiceOptionPricesProvider(key));
-                                      return async.when(
-                                        loading: () => const Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: SizedBox(
-                                            height: 18,
-                                            width: 18,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
-                                        ),
-                                        error: (e, _) => Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            'Failed to load options: $e',
-                                            style: TextStyle(color: Theme.of(context).colorScheme.error),
-                                          ),
-                                        ),
-                                        data: (items) {
-                                          
-
-                                          return Column(
-                          children: items.map((row) {
-                            // row is VendorServiceOptionPriceLite (MODEL), not Map
-
-                            final name = row.serviceOption?.name ?? 'Option';
-                            final kind = (row.serviceOption?.kind ?? '').trim();
-                            final price = row.price?.toString() ?? '';
-                            final isActive = row.isActive;
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      kind.isEmpty ? name : '$name • $kind',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    price.isEmpty ? '-' : price,
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Icon(
-                                    isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                                    size: 18,
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        );
-
-                },
-              );
-            }),
-          ],
-        ),
-      ),
-      // ✅ Service Options (per service price)
+// ✅ Service Options (per service price)
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         child: Column(
