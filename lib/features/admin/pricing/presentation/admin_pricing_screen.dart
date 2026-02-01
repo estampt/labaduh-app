@@ -43,12 +43,14 @@ class AdminPricingScreen extends ConsumerWidget {
                 icon: const Icon(Icons.refresh),
                 onPressed: () => ctrl.refresh(),
               ),
+              /*
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () => context.push('/a/pricing/addons'),
                 icon: const Icon(Icons.extension_outlined),
                 label: const Text('Add-ons'),
               ),
+              */
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () => context.push('/a/pricing/service-options'),
@@ -81,42 +83,150 @@ class AdminPricingScreen extends ConsumerWidget {
                 return RefreshIndicator(
                   onRefresh: () => ctrl.refresh(),
                   child: ListView.separated(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                     itemCount: items.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, i) {
                       final s = items[i];
+
+                      final icon = ServiceIcons.resolve(s.iconKey);
+                      final pricing = _pricingSummary(s);
+
                       return Card(
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: Theme.of(context).dividerColor.withOpacity(0.45),
+                          ),
+                        ),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          leading: CircleAvatar(
-                            child: Icon(ServiceIcons.resolve(s.iconKey), size: 20),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          leading: CircleAvatar(child: Icon(icon, size: 20)),
+
+                          // ✅ Title + Description (same pattern as previous screen)
+                          title: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                s.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              if ((s.description ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  s.description!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: Colors.grey[600]),
+                                ),
+                              ],
+                            ],
                           ),
 
-                          title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+                          // ✅ Chips row
                           subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(_pricingSummary(s)),
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                Chip(
+                                  avatar: Icon(
+                                    Icons.payments_outlined,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    pricing,
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+
+
+                                // ✅ Status toggle chip (same as Shop Services)
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: () async {
+                                    try {
+                                      await ctrl.setActive(s.id, !s.isActive);
+                                    } catch (e) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Failed to update status: $e')),
+                                      );
+                                    }
+                                  },
+                                  child: Container(
+                                    height: 32,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: s.isActive
+                                          ? Colors.green.withOpacity(0.12)
+                                          : Colors.grey.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        width: 1,
+                                        color: s.isActive ? Colors.green : Colors.grey,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          s.isActive
+                                              ? Icons.check_circle_outline
+                                              : Icons.pause_circle_outline,
+                                          size: 16,
+                                          color: s.isActive ? Colors.green : Colors.grey,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          s.isActive ? 'Active' : 'Inactive',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: s.isActive ? Colors.green : Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          trailing: Wrap(
-                            spacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Switch(
-                                value: s.isActive,
-                                onChanged: (v) => ctrl.setActive(s.id, v),
+
+                          // ✅ Consistent actions menu
+                          trailing: PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (v) {
+                              if (v == 'edit') {
+                                _openUpsertDialog(context, ref, initial: s);
+                              } else if (v == 'delete') {
+                                _confirmDelete(context, ref, s);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: ListTile(
+                                  leading: Icon(Icons.edit_outlined),
+                                  title: Text('Edit'),
+                                ),
                               ),
-                              IconButton(
-                                tooltip: 'Edit',
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () => _openUpsertDialog(context, ref, initial: s),
-                              ),
-                              IconButton(
-                                tooltip: 'Delete',
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () => _confirmDelete(context, ref, s),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: ListTile(
+                                  leading: Icon(Icons.delete_outline),
+                                  title: Text('Delete'),
+                                ),
                               ),
                             ],
                           ),
@@ -125,6 +235,7 @@ class AdminPricingScreen extends ConsumerWidget {
                     },
                   ),
                 );
+
               },
             ),
           ),
@@ -306,6 +417,7 @@ class AdminService {
   AdminService({
     required this.id,
     required this.name,
+    required this.description,  
     required this.isActive,
     required this.baseUnit,
     required this.defaultPricingModel,
@@ -318,6 +430,7 @@ class AdminService {
 
   final int id;
   final String name;
+  final String? description;
   final bool isActive;
   final String? baseUnit;
   final String? defaultPricingModel;
@@ -343,6 +456,7 @@ class AdminService {
     return AdminService(
       id: id,
       name: name,
+      description: description,
       isActive: isActive ?? this.isActive,
       baseUnit: baseUnit,
       defaultPricingModel: defaultPricingModel,
@@ -364,6 +478,7 @@ class AdminService {
     return AdminService(
       id: (json['id'] as num).toInt(),
       name: (json['name'] ?? '').toString(),
+      description: (json['description'] ?? '').toString(),
       baseUnit: (json['base_unit'] ?? '').toString().isEmpty ? null : (json['base_unit'] ?? '').toString(),
       isActive: json['is_active'] is bool
           ? (json['is_active'] as bool)
@@ -393,6 +508,7 @@ class AdminService {
 class _UpsertPayload {
   _UpsertPayload({
     required this.name,
+    required this.desc,
     required this.baseUnit,
     required this.isActive,
     required this.defaultPricingModel,
@@ -404,6 +520,7 @@ class _UpsertPayload {
   });
 
   final String name;
+  final String desc;
   final String baseUnit; // kg | item
   final bool isActive;
   final String defaultPricingModel; // per_kg_min | per_piece
@@ -419,6 +536,7 @@ class _UpsertPayload {
   Map<String, dynamic> toJson() {
     final m = <String, dynamic>{
       'name': name,
+      'description': desc,
       'base_unit': baseUnit,
       'is_active': isActive,
       'default_pricing_model': defaultPricingModel,
@@ -452,6 +570,7 @@ class _ServiceUpsertDialog extends StatefulWidget {
 
 class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
   late final TextEditingController nameCtrl;
+  late final TextEditingController descCtrl;
   late final TextEditingController minKgCtrl;
   late final TextEditingController rateKgCtrl;
   late final TextEditingController ratePieceCtrl;
@@ -467,6 +586,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
     super.initState();
     final s = widget.initial;
     nameCtrl = TextEditingController(text: s?.name ?? '');
+    descCtrl = TextEditingController(text: s?.description ?? '');
     minKgCtrl = TextEditingController(text: s?.defaultMinKg?.toStringAsFixed(2) ?? '');
     rateKgCtrl = TextEditingController(text: s?.defaultRatePerKg?.toStringAsFixed(2) ?? '');
     ratePieceCtrl = TextEditingController(text: s?.defaultRatePerPiece?.toStringAsFixed(2) ?? '');
@@ -481,6 +601,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
   @override
   void dispose() {
     nameCtrl.dispose();
+    descCtrl.dispose();
     minKgCtrl.dispose();
     rateKgCtrl.dispose();
     ratePieceCtrl.dispose();
@@ -497,6 +618,12 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
     final name = nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service name is required')));
+      return;
+    }
+  
+    final desc = descCtrl.text.trim();    
+    if (desc.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service description is required')));
       return;
     }
 
@@ -519,6 +646,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
       context,
       _UpsertPayload(
         name: name,
+        desc: desc,
         baseUnit: baseUnit,
         isActive: isActive,
         defaultPricingModel: pricingModel,
@@ -535,14 +663,30 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.initial == null ? 'Add Service' : 'Edit Service'),
-      content: SingleChildScrollView(
+      
+    content: SizedBox(
+      width: 420, // 👈 makes dialog wider & nicer
+      child: SingleChildScrollView(
         child: Column(
+ 
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
               decoration: const InputDecoration(labelText: 'Service name'),
             ),
+            
+            const SizedBox(height: 12),
+            // ✅ NEW: Description
+            TextField(
+              controller: descCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Optional short description shown to vendors',
+              ),
+            ),
+            
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: baseUnit,
@@ -616,6 +760,7 @@ class _ServiceUpsertDialogState extends State<_ServiceUpsertDialog> {
           ],
         ),
       ),
+    ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(onPressed: _save, child: const Text('Save')),
