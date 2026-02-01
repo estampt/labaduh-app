@@ -4,15 +4,17 @@ import 'shop_service_options_dtos.dart'; // <- add this import
 class ServiceDto {
   final int id;
   final String name;
+  final String? description;
   final bool isActive;
   final String? icon;
   final String? baseUnit;
 
-  ServiceDto({required this.id, required this.name, this.isActive = true, this.icon, this.baseUnit});
+  ServiceDto({required this.id, required this.name, this.description, this.isActive = true, this.icon, this.baseUnit});
 
   factory ServiceDto.fromJson(Map<String, dynamic> j) => ServiceDto(
         id: j['id'] as int,
         name: (j['name'] ?? '') as String,
+        description: j['description'] as String?,
         isActive: (j['active'] ?? false) as bool,
         icon: j['icon'] as String?,
         baseUnit: j['base_unit'] as String?,

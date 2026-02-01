@@ -39,14 +39,7 @@ class VendorShopsScreen extends ConsumerWidget {
                             Expanded(
                               child: Text(s.name, style: Theme.of(context).textTheme.titleMedium),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(),
-                              ),
-                              child: Text(s.isActive ? 'ACTIVE' : 'INACTIVE'),
-                            ),
+                            
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -65,14 +58,59 @@ class VendorShopsScreen extends ConsumerWidget {
                               label: const Text('Edit'),
                             ),
                             const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: () async {
-                                await ref.read(vendorShopsActionsProvider).toggle(s.id);
-                                ref.invalidate(vendorShopsProvider);
+                            InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () async {
+                                try {
+                                  await ref.read(vendorShopsActionsProvider).toggle(s.id);
+                                  ref.invalidate(vendorShopsProvider);
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Failed to update status: $e')),
+                                  );
+                                }
                               },
-                              icon: Icon(s.isActive ? Icons.toggle_off : Icons.toggle_on),
-                              label: Text(s.isActive ? 'Deactivate' : 'Activate'),
+                              child: Container(
+                                height: 32,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: s.isActive
+                                      ? Colors.green.withOpacity(0.12)
+                                      : Colors.grey.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(20),
+
+                                  // ✅ SOLID border (inner border only)
+                                  border: Border.all(
+                                    width: 1,
+                                    color: s.isActive ? Colors.green : Colors.grey,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      s.isActive
+                                          ? Icons.check_circle_outline
+                                          : Icons.pause_circle_outline,
+                                      size: 16,
+                                      color: s.isActive ? Colors.green : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      s.isActive ? 'Active' : 'Inactive',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: s.isActive ? Colors.green : Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
+
+
                             const Spacer(),
                             OutlinedButton.icon(
                             onPressed: () => Navigator.push(

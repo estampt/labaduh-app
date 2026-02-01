@@ -97,6 +97,7 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                 else
                   ...rows.map((r) {
                     final serviceName = r.service?.name ?? 'Service #${r.serviceId}';
+                    final serviceDescription = r.service?.description ?? '';
                     final leadingIcon = _serviceIconForName(serviceName);
 
                     final modelLabel = _modelLabel(r.pricingModel);
@@ -146,14 +147,32 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                 leading: CircleAvatar(child: Icon(leadingIcon)),
-                                title: Text(
-                                  serviceName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+
+                                // ✅ Beautified: name + optional description (without using subtitle)
+                                title: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      serviceName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                    ),
+                                    if (serviceDescription.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        serviceDescription,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ],
                                 ),
+
+                                // ✅ Keep your chips here
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Wrap(
@@ -163,64 +182,62 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                       _Chip(icon: modelIcon, label: modelLabel),
                                       _Chip(icon: Icons.scale_outlined, label: 'uom ${r.uom}'),
                                       _Chip(icon: Icons.payments_outlined, label: priceLabel),
-                                        GestureDetector(
+
+                                      // ✅ Cleaner toggle chip (no GestureDetector wrapper; InkWell only)
+                                      InkWell(
+                                        borderRadius: BorderRadius.circular(20),
                                         onTap: () async {
-                                          HapticFeedback.lightImpact();
-                                          await ref.read(shopServicesProvider.notifier).toggleActive(r);
+                                          try {
+                                            HapticFeedback.lightImpact();
+                                            await ref.read(shopServicesProvider.notifier).toggleActive(r);
+                                          } catch (e) {
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Failed to update status: $e')),
+                                            );
+                                          }
                                         },
                                         child: AnimatedContainer(
                                           duration: const Duration(milliseconds: 200),
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          height: 32,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12),
                                           decoration: BoxDecoration(
                                             color: r.isActive
                                                 ? Colors.green.withOpacity(0.12)
-                                                : Colors.grey.withOpacity(0.15),
+                                                : Colors.grey.withOpacity(0.12),
                                             borderRadius: BorderRadius.circular(20),
                                             border: Border.all(
+                                              width: 1,
                                               color: r.isActive ? Colors.green : Colors.grey,
                                             ),
                                           ),
-                                          child: InkWell(
-                                            borderRadius: BorderRadius.circular(20),
-                                            onTap: () async {
-                                              try {
-                                                await ref.read(shopServicesProvider.notifier).toggleActive(r);
-                                              } catch (e) {
-                                                if (!context.mounted) return;
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('Failed to update status: $e')),
-                                                );
-                                              }
-                                            },
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    r.isActive ? Icons.toggle_on : Icons.toggle_off,
-                                                    size: 18,
-                                                    color: r.isActive ? Colors.green : Colors.grey,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    r.isActive ? 'Active' : 'Inactive',
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.w600,
-                                                      color: r.isActive ? Colors.green : Colors.grey,
-                                                    ),
-                                                  ),
-                                                ],
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                r.isActive
+                                                    ? Icons.check_circle_outline
+                                                    : Icons.pause_circle_outline,
+                                                size: 16,
+                                                color: r.isActive ? Colors.green : Colors.grey,
                                               ),
-                                            ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                r.isActive ? 'Active' : 'Inactive',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: r.isActive ? Colors.green : Colors.grey,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-
                                         ),
                                       ),
-
                                     ],
                                   ),
                                 ),
+
                                 trailing: PopupMenuButton<String>(
                                   icon: const Icon(Icons.more_vert),
                                   onSelected: (v) async {
@@ -229,9 +246,7 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                     } else if (v == 'delete') {
                                       final ok = await _confirmDelete(context, serviceName);
                                       if (ok == true) {
-                                        await ref
-                                            .read(shopServicesProvider.notifier)
-                                            .delete(r.id);
+                                        await ref.read(shopServicesProvider.notifier).delete(r.id);
                                       }
                                     }
                                   },
@@ -253,6 +268,7 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                   ],
                                 ),
                               ),
+
 
                               // Child section
                               Padding(
