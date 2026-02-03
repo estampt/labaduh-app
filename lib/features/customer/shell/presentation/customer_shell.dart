@@ -64,16 +64,19 @@ class CustomerShell extends ConsumerWidget {
   }
 
   Widget _logo() {
-    return SizedBox(
-      height: 28,
-      width: 170,
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    child: SizedBox(
+      height: 28, // sweet spot for AppBar
       child: Image.asset(
         'assets/branding/labaduh_logo.png',
         fit: BoxFit.contain,
         alignment: Alignment.centerLeft,
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,7 +94,7 @@ class CustomerShell extends ConsumerWidget {
           children: [
             _logo(),
             const SizedBox(width: 10),
-            Expanded(child: Text(_titleForIndex(navigationShell.currentIndex))),
+            //Expanded(child: Text(_titleForIndex(navigationShell.currentIndex))),
           ],
         ),
         actions: [
