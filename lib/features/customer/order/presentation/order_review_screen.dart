@@ -5,13 +5,21 @@ import 'package:go_router/go_router.dart';
 import '../state/order_draft_controller.dart';
 import 'widgets/section_title.dart';
 import 'widgets/sticky_bottom_bar.dart';
+import '../state/order_submit_provider.dart';
+
+import '../state/order_submit_provider.dart';
+import '../state/order_draft_controller.dart';
+
 
 class OrderReviewScreen extends ConsumerWidget {
   const OrderReviewScreen({super.key});
 
+  
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final draft = ref.watch(orderDraftProvider);
+    final submit = ref.watch(orderSubmitProvider);
+    final isLoading = submit.isLoading;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Review Order')),
@@ -69,7 +77,20 @@ class OrderReviewScreen extends ConsumerWidget {
               title: 'Total: ₱ ${draft.total}',
               subtitle: 'Next: find laundry partner',
               buttonText: 'Confirm & Find',
-              onPressed: () => context.push('/c/order/matching'),
+              onPressed: () async {
+                try {
+                  await ref.read(orderSubmitProvider.notifier).submit();
+                  if (!context.mounted) return;
+                  context.go('/c/order/matching');
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Create order failed: $e')),
+                  );
+                }
+              },
+
+
             ),
           ),
         ],

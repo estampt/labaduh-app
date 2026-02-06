@@ -1,41 +1,79 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/order_models.dart';
 
-final orderDraftProvider = StateNotifierProvider<OrderDraftController, OrderDraft>((ref) {
-  return OrderDraftController();
-});
+final orderDraftProvider =
+    NotifierProvider<OrderDraftController, OrderDraft>(
+        OrderDraftController.new);
 
-class OrderDraftController extends StateNotifier<OrderDraft> {
-  OrderDraftController() : super(const OrderDraft());
+class OrderDraftController extends Notifier<OrderDraft> {
+  @override
+  OrderDraft build() => OrderDraft.initial();
 
-  void reset() => state = const OrderDraft();
+  // -----------------------------
+  // Get qty for UI
+  // -----------------------------
+  int qtyFor(int serviceId) {
+    final found =
+        state.selections.where((s) => s.service.id == serviceId);
+    if (found.isEmpty) return 0;
+    return found.first.qty;
+  }
 
-  void setAddressLabel(String label) => state = state.copyWith(addressLabel: label);
-  void setPickupOption(PickupOption option) => state = state.copyWith(pickupOption: option);
-  void setDeliveryOption(DeliveryOption option) => state = state.copyWith(deliveryOption: option);
+  // -----------------------------
+  // Add / Update qty
+  // -----------------------------
+  void setServiceQty(ServiceCatalogItem service, int qty) {
+    final list = [...state.selections];
+    final idx =
+        list.indexWhere((s) => s.service.id == service.id);
 
-  void setServiceQty(LaundryService service, int qty) {
-    final minQty = service.baseQty;
-    final safeQty = qty < minQty ? minQty : qty;
-
-    final selections = [...state.selections];
-    final idx = selections.indexWhere((s) => s.service.id == service.id);
-
-    if (idx == -1) {
-      selections.add(ServiceSelection(service: service, qty: safeQty));
+    if (qty <= 0) {
+      if (idx != -1) list.removeAt(idx);
+    } else if (idx == -1) {
+      list.add(ServiceSelection(service: service, qty: qty));
     } else {
-      selections[idx] = ServiceSelection(service: service, qty: safeQty);
+      list[idx] = list[idx].copyWith(qty: qty);
     }
 
-    state = state.copyWith(selections: selections);
+    state = state.copyWith(selections: list);
   }
 
-  void removeService(String serviceId) {
-    state = state.copyWith(selections: state.selections.where((s) => s.service.id != serviceId).toList());
+  // -----------------------------
+  // REMOVE SERVICE (missing earlier)
+  // -----------------------------
+  void removeService(int serviceId) {
+    final list = state.selections
+        .where((s) => s.service.id != serviceId)
+        .toList();
+
+    state = state.copyWith(selections: list);
   }
 
-  int qtyFor(String serviceId) {
-    final found = state.selections.where((s) => s.service.id == serviceId);
-    return found.isEmpty ? 0 : found.first.qty;
+  // -----------------------------
+  // Pickup option
+  // -----------------------------
+  void setPickupOption(PickupOption option) {
+    state = state.copyWith(pickupOption: option);
+  }
+
+  // -----------------------------
+  // Delivery option
+  // -----------------------------
+  void setDeliveryOption(DeliveryOption option) {
+    state = state.copyWith(deliveryOption: option);
+  }
+
+  // -----------------------------
+  // Address label
+  // -----------------------------
+  void setAddressLabel(String label) {
+    state = state.copyWith(addressLabel: label);
+  }
+
+  // -----------------------------
+  // Reset draft
+  // -----------------------------
+  void reset() {
+    state = OrderDraft.initial();
   }
 }

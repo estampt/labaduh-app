@@ -1,62 +1,89 @@
+enum PickupOption { asap, tomorrow, scheduled }
+enum DeliveryOption { pickupAndDeliver, walkIn }
 enum UnitType { kilo, piece }
 
-class LaundryService {
-  LaundryService({
+class ServiceCatalogItem {
+  final int id;
+  final String name;
+  final int baseQty;
+  final UnitType unitType;
+  final num basePrice;
+  final num excessPerUnit;
+  final String? icon;
+
+  const ServiceCatalogItem({
     required this.id,
     required this.name,
     required this.baseQty,
     required this.unitType,
     required this.basePrice,
-    this.excessPerUnit = 0,
+    required this.excessPerUnit,
     this.icon,
   });
-
-  final String id;
-  final String name;
-  final int baseQty;
-  final UnitType unitType;
-  final int basePrice;
-  final int excessPerUnit;
-  final String? icon;
 }
 
 class ServiceSelection {
-  const ServiceSelection({required this.service, required this.qty});
-  final LaundryService service;
+  final ServiceCatalogItem service;
   final int qty;
 
-  int get price {
-    final excess = qty - service.baseQty;
-    final extra = excess > 0 ? excess * service.excessPerUnit : 0;
-    return service.basePrice + extra;
-  }
-
-  String get qtyLabel {
-    final unit = service.unitType == UnitType.kilo ? 'KG' : 'pc';
-    return '$qty $unit';
-  }
-}
-
-enum PickupOption { asap, tomorrow, scheduled }
-enum DeliveryOption { pickupAndDeliver, walkIn }
-
-class OrderDraft {
-  const OrderDraft({
-    this.selections = const [],
-    this.pickupOption = PickupOption.asap,
-    this.deliveryOption = DeliveryOption.pickupAndDeliver,
-    this.addressLabel = 'Set pickup address',
+  const ServiceSelection({
+    required this.service,
+    required this.qty,
   });
 
+  String get unitLabel => service.unitType == UnitType.kilo ? 'KG' : 'pc';
+  String get qtyLabel => '$qty $unitLabel';
+
+  num get price {
+    final extra = (qty - service.baseQty);
+    return service.basePrice + (extra > 0 ? extra * service.excessPerUnit : 0);
+  }
+
+  Map<String, dynamic> toPayload() {
+    return {
+      'service_id': service.id,
+      'qty': qty,
+      'options': <Map<String, dynamic>>[],
+    };
+  }
+
+  ServiceSelection copyWith({int? qty}) =>
+      ServiceSelection(service: service, qty: qty ?? this.qty);
+}
+
+
+class OrderDraft {
   final List<ServiceSelection> selections;
   final PickupOption pickupOption;
   final DeliveryOption deliveryOption;
   final String addressLabel;
 
-  int get subtotal => selections.fold<int>(0, (sum, s) => sum + s.price);
-  int get deliveryFee => deliveryOption == DeliveryOption.walkIn ? 0 : 49;
-  int get serviceFee => subtotal == 0 ? 0 : (subtotal * 0.05).round();
-  int get total => subtotal + deliveryFee + serviceFee;
+  const OrderDraft({
+    required this.selections,
+    required this.pickupOption,
+    required this.deliveryOption,
+    required this.addressLabel,
+  });
+
+  factory OrderDraft.initial() => const OrderDraft(
+        selections: [],
+        pickupOption: PickupOption.tomorrow,
+        deliveryOption: DeliveryOption.pickupAndDeliver,
+        addressLabel: 'Set pickup address',
+      );
+
+  num get subtotal =>
+      selections.fold<num>(0, (sum, s) => sum + s.price);
+
+  num get deliveryFee =>
+      deliveryOption == DeliveryOption.walkIn ? 0 : 49;
+
+  num get serviceFee => 15;
+
+  num get total => subtotal + deliveryFee + serviceFee;
+
+  List<Map<String, dynamic>> toItemsPayload() =>
+      selections.map((s) => s.toPayload()).toList();
 
   OrderDraft copyWith({
     List<ServiceSelection>? selections,
