@@ -13,7 +13,13 @@ class OrderMatchingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // If not set yet, use a dev fallback to test quickly.
     // Later: set this from Review screen after POST /customer/orders.
-    final orderId = ref.watch(currentOrderIdProvider) ?? 8;
+    final orderId = ref.watch(currentOrderIdProvider);
+    if (orderId == null) {
+      return const Scaffold(
+        body: Center(child: Text('No active order. Please start a new order.')),
+      );
+    }
+
 
     final asyncOrder = ref.watch(
       orderPollingProvider((orderId: orderId, interval: matchingPollInterval)),

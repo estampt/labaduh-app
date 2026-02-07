@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 
 import '../state/order_draft_controller.dart';
 import 'widgets/section_title.dart';
@@ -83,6 +84,11 @@ class OrderReviewScreen extends ConsumerWidget {
                   if (!context.mounted) return;
                   context.go('/c/order/matching');
                 } catch (e) {
+                  if (e is DioException) {
+                    final data = e.response?.data;
+                    debugPrint('Create order error status: ${e.response?.statusCode}');
+                    debugPrint('Create order error body: $data');
+                  }
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Create order failed: $e')),

@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+
 import '../data/customer_order_repo.dart';
 import 'order_tracking_providers.dart';
 import 'order_draft_controller.dart';
@@ -19,8 +22,9 @@ class OrderSubmitController
     final draft = ref.read(orderDraftProvider);
 
     final payload = {
-      'search_lat': 1.3001,
-      'search_lng': 103.8001,
+      'lat': 1.3001,
+      'lng': 103.8001,
+
       'radius_km': 3,
 
       'pickup_mode': 'tomorrow',
@@ -43,14 +47,22 @@ class OrderSubmitController
     final repo = ref.read(customerOrderRepoProvider);
 
     await repo.createQuote(payload);
-    final created = await repo.createOrder(payload);
 
-    final orderId = created['id'] as int;
+    try {
+      final created = await repo.createOrder(payload); 
 
-    ref.read(currentOrderIdProvider.notifier).state =
-        orderId;
+      final orderId = created['id'] as int;
 
-    state = AsyncData(orderId);
-    return orderId;
+      ref.read(currentOrderIdProvider.notifier).state =
+          orderId;
+
+      state = AsyncData(orderId);
+      return orderId;
+    } on DioException catch (e) {
+      debugPrint('Create order status: ${e.response?.statusCode}');
+      debugPrint('Create order body: ${e.response?.data}');
+      rethrow;
+    }
+    
   }
 }
