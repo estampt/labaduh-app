@@ -39,8 +39,9 @@ class CustomerHomeTab extends ConsumerWidget {
                       height: 52,
                       child: FilledButton(
                         onPressed: () {
-                          ref.read(orderDraftProvider.notifier).reset();
+                          ref.read(orderDraftControllerProvider.notifier).reset();
                           context.push('/c/order/services');
+
                         },
                         child: const Text('Start Order'),
                       ),

@@ -5,7 +5,7 @@ enum UnitType { kilo, piece }
 class ServiceCatalogItem {
   final int id;
   final String name;
-  final int baseQty;
+  final num baseQty;
   final UnitType unitType;
   final num basePrice;
   final num excessPerUnit;

@@ -4,7 +4,7 @@ class KgStepper extends StatelessWidget {
   const KgStepper({super.key, required this.value, required this.min, required this.onChanged, required this.suffix});
 
   final int value;
-  final int min;
+  final num min;
   final String suffix;
   final ValueChanged<int> onChanged;
 
