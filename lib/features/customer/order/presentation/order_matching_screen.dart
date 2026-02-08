@@ -13,8 +13,8 @@ class OrderMatchingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // If not set yet, use a dev fallback to test quickly.
     // Later: set this from Review screen after POST /customer/orders.
-    final orderId = ref.watch(currentOrderIdProvider);
-    if (orderId == null) {
+    final orderId = GoRouterState.of(context).extra as int;
+    if (orderId == 0) {
       return const Scaffold(
         body: Center(child: Text('No active order. Please start a new order.')),
       );

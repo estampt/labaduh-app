@@ -2,51 +2,65 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/ui/service_icons.dart';
+
 import '../state/order_draft_controller.dart';
 import '../state/order_submit_provider.dart';
 import 'widgets/sticky_bottom_bar.dart';
 import 'widgets/section_title.dart';
-import '../../../../core/ui/service_icons.dart';
 
 class OrderReviewScreen extends ConsumerWidget {
   const OrderReviewScreen({super.key});
+
+  String _unitLabel(String baseUnit) {
+    final u = baseUnit.toLowerCase().trim();
+    return (u == 'kg' || u == 'kilo' || u == 'kilogram') ? 'KG' : 'pc';
+  }
+
+  String _pickupSubtitle(String pickupMode) {
+    switch (pickupMode) {
+      case 'asap':
+        return 'Pickup ASAP selected (placeholder)';
+      case 'tomorrow':
+        return 'Tomorrow pickup selected (placeholder)';
+      case 'schedule':
+        return 'Pickup schedule selected (placeholder)';
+      default:
+        return 'Pickup schedule selected (placeholder)';
+    }
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F6FB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: child,
+    );
+  }
+
+  Widget _feeRow(String label, String value, {bool bold = false}) {
+    final style = TextStyle(
+      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          Text(value, style: style),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final draft = ref.watch(orderDraftControllerProvider);
     final submitState = ref.watch(orderSubmitProvider);
     final isLoading = submitState.isLoading;
-
-    String unitLabel(String baseUnit) {
-      final u = baseUnit.toLowerCase().trim();
-      return (u == 'kg' || u == 'kilo' || u == 'kilogram') ? 'KG' : 'pc';
-    }
-
-    Widget card({required Widget child}) {
-      return Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF4F6FB),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: const EdgeInsets.all(14),
-        child: child,
-      );
-    }
-
-    Widget feeRow(String label, String value, {bool bold = false}) {
-      final style = TextStyle(
-        fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-      );
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            Expanded(child: Text(label, style: style)),
-            Text(value, style: style),
-          ],
-        ),
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Review Order')),
@@ -58,62 +72,58 @@ class OrderReviewScreen extends ConsumerWidget {
               const SectionTitle('Services'),
               const SizedBox(height: 10),
 
-              // ✅ Services list in cards
+              // ✅ Services list with icons
               ...draft.services.map((s) {
-                final unit = unitLabel(s.row.service.baseUnit);
+                final unit = _unitLabel(s.row.service.baseUnit);
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: card(
+                  child: _card(
                     child: Row(
-                    children: [
-                      /// 🔹 SERVICE ICON
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
+                      children: [
+                        // Icon box (same icon system as Select Services)
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            ServiceIcons.resolve(s.row.service.icon),
+                            size: 22,
+                          ),
                         ),
-                        child: Icon(
-                          ServiceIcons.resolve(s.row.service.icon),
-                          size: 22,
-                        ),
-                      ),
+                        const SizedBox(width: 12),
 
-                      const SizedBox(width: 12),
-
-                      /// 🔹 NAME + QTY
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.row.service.name,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                        // Name + qty
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                s.row.service.name,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${s.qty} ${_unitLabel(s.row.service.baseUnit)}',
-                              style: const TextStyle(color: Colors.black54),
-                            ),
-                            
-                          ],
+                              const SizedBox(height: 6),
+                              Text(
+                                '${s.qty} $unit',
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
 
-                      /// 🔹 PRICE
-                      Text(
-                        '₱ ${s.computedPrice}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
+                        // Price
+                        Text(
+                          '₱ ${s.computedPrice}',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
-                      ),
-                    ],
-                  ),
-
+                      ],
+                    ),
                   ),
                 );
               }),
@@ -122,15 +132,14 @@ class OrderReviewScreen extends ConsumerWidget {
               const SectionTitle('Fees'),
               const SizedBox(height: 10),
 
-              // ✅ Fees card
-              card(
+              _card(
                 child: Column(
                   children: [
-                    feeRow('Subtotal', '₱ ${draft.subtotal}'),
-                    feeRow('Delivery', '₱ ${draft.deliveryFee}'),
-                    feeRow('Service fee', '₱ ${draft.serviceFee}'),
+                    _feeRow('Subtotal', '₱ ${draft.subtotal}'),
+                    _feeRow('Delivery', '₱ ${draft.deliveryFee}'),
+                    _feeRow('Service fee', '₱ ${draft.serviceFee}'),
                     const Divider(height: 18),
-                    feeRow('Total', '₱ ${draft.total}', bold: true),
+                    _feeRow('Total', '₱ ${draft.total}', bold: true),
                   ],
                 ),
               ),
@@ -139,8 +148,7 @@ class OrderReviewScreen extends ConsumerWidget {
               const SectionTitle('Pickup details'),
               const SizedBox(height: 10),
 
-              // ✅ Pickup details card (placeholder UI, same as your design)
-              card(
+              _card(
                 child: Row(
                   children: [
                     const Icon(Icons.calendar_today_outlined, size: 20),
@@ -181,7 +189,6 @@ class OrderReviewScreen extends ConsumerWidget {
 
                 try {
                   final order = await submitCtrl.submit();
-
                   // ignore: use_build_context_synchronously
                   context.push('/c/order/matching', extra: order.id);
                 } catch (e) {
@@ -196,23 +203,5 @@ class OrderReviewScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-}
-
-String _unitLabel(String baseUnit) {
-  final u = baseUnit.toLowerCase().trim();
-  return (u == 'kg' || u == 'kilo' || u == 'kilogram') ? 'KG' : 'pc';
-}
-
-String _pickupSubtitle(String pickupMode) {
-  switch (pickupMode) {
-    case 'asap':
-      return 'Pickup ASAP selected (placeholder)';
-    case 'tomorrow':
-      return 'Tomorrow pickup selected (placeholder)';
-    case 'schedule':
-      return 'Pickup schedule selected (placeholder)';
-    default:
-      return 'Pickup schedule selected (placeholder)';
   }
 }
