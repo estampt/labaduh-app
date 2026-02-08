@@ -3,10 +3,20 @@ import 'package:dio/dio.dart';
 import '../models/discovery_service_models.dart';
 import '../models/order_models.dart';
 import '../models/order_payloads.dart';
+import '../models/latest_orders_models.dart';
 
 class CustomerOrdersApi {
   final Dio dio;
   CustomerOrdersApi(this.dio);
+
+  Future<LatestOrdersResponse> latestOrders({String? cursor}) async {
+    final res = await dio.get(
+      '/api/v1/customer/orders/latest',
+      queryParameters: cursor == null ? null : {'cursor': cursor},
+    );
+
+    return LatestOrdersResponse.fromJson(Map<String, dynamic>.from(res.data));
+  }
 
   Future<List<DiscoveryServiceRow>> discoveryServices({
     required double lat,
