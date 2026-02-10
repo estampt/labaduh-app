@@ -188,6 +188,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
 
+      GoRoute(
+        path: '/c/orders/:orderId/review',
+        name: 'customer-order-review',
+        builder: (context, state) {
+          final orderId =
+              int.parse(state.pathParameters['orderId']!);
+
+          final extra = state.extra as Map<String, dynamic>?;
+
+          return OrderCommentsScreen(
+            orderId: orderId,
+            showOrderCompletedMessage:
+                extra?['showCompletedMessage'] ?? false,
+          );
+        },
+      ),
+
 
       // ✅ Admin + signup extras + vendor modules
       ...adminRoutes,

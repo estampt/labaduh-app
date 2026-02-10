@@ -25,12 +25,13 @@ dependencies:
   flutter_typeahead: ^4.4.2
   http: ^1.1.0
   intl_phone_number_input: ^0.7.5  # Add this line
+  flutter_image_compress: ^2.1.0
+  path_provider: ^2.1.2
   image_picker: ^1.0.7
 
   firebase_core: ^3.0.0
   firebase_messaging: ^15.0.0
-  flutter_local_notifications: ^17.0.0
-
+  flutter_local_notifications: ^17.0.0 
 dev_dependencies:
   flutter_test:
     sdk: flutter
