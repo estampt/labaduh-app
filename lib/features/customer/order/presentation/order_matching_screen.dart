@@ -465,11 +465,7 @@ class _OrderCommentsScreenState extends ConsumerState<OrderCommentsScreen> {
 
       if (!mounted) return;
 
-      // Give user feedback first (then navigate).
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Review submitted. Thank you!')),
-      );
-
+      
       WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!mounted) return;
 
@@ -479,7 +475,12 @@ class _OrderCommentsScreenState extends ConsumerState<OrderCommentsScreen> {
         Navigator.of(context).pop();
       } else {
         // Fallback if no stack
-        context.go('/c/order/matching');//context.go('/c/orders'); // keep if your router really uses this
+        context.go('/c/order/tracking');
+        // Give user feedback first (then navigate).
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Review submitted. Thank you!')),
+        );
+
       }
     } else {
       // ✅ No active orders → go home
