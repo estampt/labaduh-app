@@ -61,7 +61,7 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
                         // ✅ NEW: show selected add-ons / options under the service
                         if (s.selectedOptionIds.isNotEmpty) ...[
                           const SizedBox(height: 8),
-                          _SelectedOptionsChips(
+                          _SelectedAddonsBlock(
                             service: s.row,
                             selectedIds: s.selectedOptionIds,
                           ),
@@ -94,7 +94,7 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
                 try {
                   final order = await submitCtrl.submit();
                   if (!mounted) return;
-                   context.go('/c/orders');
+                  context.go('/c/orders');
                 } catch (e) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -112,8 +112,8 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
   }
 }
 
-class _SelectedOptionsChips extends StatelessWidget {
-  const _SelectedOptionsChips({
+class _SelectedAddonsBlock extends StatelessWidget {
+  const _SelectedAddonsBlock({
     required this.service,
     required this.selectedIds,
   });
@@ -123,25 +123,51 @@ class _SelectedOptionsChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final allOptions = <ServiceOptionItem>[
+    // Combine addons + grouped options
+    final all = <ServiceOptionItem>[
       ...service.addons,
       ...service.optionGroups.expand((g) => g.items),
     ];
 
-    final selected = allOptions.where((o) => selectedIds.contains(o.id)).toList();
+    final selected = all.where((o) => selectedIds.contains(o.id)).toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
     if (selected.isEmpty) return const SizedBox.shrink();
 
-    selected.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: selected.map((o) {
-        final price = o.priceMin;
-        final label = price == 0 ? o.name : '${o.name} • ₱ $price';
-
-        return Chip(label: Text(label));
-      }).toList(),
+    // Match the simple, clean list style (similar to your services cards)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        const Text(
+          'Add-ons',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...selected.map((o) {
+          final price = o.priceMin; // consistent with your estimation logic
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    o.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  '₱ $price',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 }

@@ -86,3 +86,11 @@ class LatestOrdersController extends AsyncNotifier<LatestOrdersState> {
 final latestOrdersProvider =
     AsyncNotifierProvider<LatestOrdersController, LatestOrdersState>(
         LatestOrdersController.new);
+
+
+/// Completed orders (history) - fetched once on demand (no polling).
+final completedOrdersProvider = FutureProvider.autoDispose<List<LatestOrder>>((ref) async {
+  final api = ref.read(customerOrdersApiProvider);
+  final res = await api.listOrders(status: 'closed');
+  return res.data;
+});

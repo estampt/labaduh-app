@@ -20,6 +20,20 @@ class CustomerOrdersApi {
     return LatestOrdersResponse.fromJson(Map<String, dynamic>.from(res.data));
   }
 
+
+  /// Generic orders list (e.g. history)
+  /// Example: /api/v1/customer/orders?status=completed
+  Future<LatestOrdersResponse> listOrders({String? status, String? cursor}) async {
+    final res = await dio.get(
+      '/api/v1/customer/orders',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (cursor != null) 'cursor': cursor,
+      },
+    );
+    return LatestOrdersResponse.fromJson(Map<String, dynamic>.from(res.data));
+  }
+
   Future<List<DiscoveryServiceRow>> discoveryServices({
     required double lat,
     required double lng,
