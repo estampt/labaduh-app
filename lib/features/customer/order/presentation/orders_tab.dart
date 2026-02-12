@@ -308,10 +308,10 @@ class _OrderDashboardCard extends StatelessWidget {
             subtitle: Text(
               order.shop == null
                   ? 'Rating: 4.8 • 1.2km away'
-                  : 'Tap to view order details',
+                  : 'To display more details, implement shop data in the API',
               style: const TextStyle(color: Colors.black54),
             ),
-            onTap: onOpenDetails,
+            // onTap: onOpenDetails, // Temporarily disabled
           ),
         ),
         const SizedBox(height: 10),
@@ -389,6 +389,8 @@ class _OrderDashboardCard extends StatelessWidget {
                 const Divider(height: 18),
                 _TrackingStep(label: 'Delivered', state: _stepState(4, stepIndex)),
 
+                /*
+                Temorarily disabled, no need to display details button
                 const SizedBox(height: 10),
                 Align(
                   alignment: Alignment.centerRight,
@@ -397,6 +399,7 @@ class _OrderDashboardCard extends StatelessWidget {
                     child: const Text('Open details'),
                   ),
                 ),
+                */
               ],
             ),
           ),
