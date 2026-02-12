@@ -8,9 +8,14 @@ import 'package:go_router/go_router.dart';
 import '../models/latest_orders_models.dart';
 import '../state/latest_orders_provider.dart';
 
-/// OrdersTab (Live Dashboard)
-/// - Shows ONLY ACTIVE orders from latestOrdersProvider (auto-refresh).
-/// - "View history" loads COMPLETED orders via /api/v1/customer/orders?status=completed (one-time fetch per open).
+/// OrdersTab - default UI similar to tracking card screenshot:
+/// - Partner card
+/// - Items card (with total)
+/// - Tracking steps card
+///
+/// Data source:
+/// - Active orders ONLY from latestOrdersProvider (auto-refresh)
+/// - History via completedOrdersProvider (bottom sheet, one-time fetch per open)
 class OrdersTab extends ConsumerStatefulWidget {
   const OrdersTab({super.key});
 
@@ -20,14 +25,11 @@ class OrdersTab extends ConsumerStatefulWidget {
 
 class _OrdersTabState extends ConsumerState<OrdersTab> {
   Timer? _timer;
-
-  // Adjust based on your needs (battery vs freshness).
   static const _pollInterval = Duration(seconds: 8);
 
   @override
   void initState() {
     super.initState();
-    // Poll by refreshing the provider.
     _timer = Timer.periodic(_pollInterval, (_) {
       ref.read(latestOrdersProvider.notifier).refresh();
     });
@@ -57,7 +59,6 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
     final estimated = _num(o.estimatedTotal);
     if (estimated > 0) return estimated;
 
-    // Fallback: sum items + options
     num sum = 0;
     for (final it in o.items) {
       sum += _num(it.price);
@@ -74,6 +75,27 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
       c += it.options.length;
     }
     return c;
+  }
+
+  /// Maps backend status -> step index in the UI timeline.
+  /// Adjust these mappings as your backend statuses finalize.
+  int _statusToStepIndex(String status) {
+    final s = status.toLowerCase().trim();
+
+    // ordered steps (0..N-1)
+    // 0 pickup scheduled
+    // 1 picked up
+    // 2 washing
+    // 3 ready
+    // 4 delivered
+    if (s == 'published' || s == 'matched' || s == 'accepted' || s == 'scheduled') return 0;
+    if (s == 'picked_up' || s == 'pickedup') return 1;
+    if (s == 'washing') return 2;
+    if (s == 'ready') return 3;
+    if (s == 'delivered' || s == 'completed') return 4;
+
+    // default: earliest step
+    return 0;
   }
 
   Future<void> _openHistorySheet() async {
@@ -96,7 +118,6 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                       style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                     ),
                     const SizedBox(height: 8),
-
                     Expanded(
                       child: historyAsync.when(
                         loading: () => const Center(child: CircularProgressIndicator()),
@@ -167,6 +188,10 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
       appBar: AppBar(
         title: const Text('Orders'),
         actions: [
+          TextButton(
+            onPressed: _openHistorySheet,
+            child: const Text('History'),
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => ref.read(latestOrdersProvider.notifier).refresh(),
@@ -195,7 +220,6 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
         data: (state) {
           final active = state.orders.where((o) => _isActiveStatus(o.status)).toList();
 
-          // ✅ UX: show only active orders. History is separate and fetched once on demand.
           if (active.isEmpty) {
             return Center(
               child: Padding(
@@ -207,13 +231,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                       'No active orders',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'When you place an order, it will appear here and update automatically.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.black54),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: _openHistorySheet,
                       child: const Text('View history'),
@@ -231,48 +249,228 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
 
           return RefreshIndicator(
             onRefresh: () => ref.read(latestOrdersProvider.notifier).refresh(),
-            child: ListView(
+            child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Active orders', style: TextStyle(fontWeight: FontWeight.w900)),
-                    TextButton(
-                      onPressed: _openHistorySheet,
-                      child: const Text('View history'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                ...active.map((o) {
-                  final total = _computeOrderTotal(o);
-                  final optCount = _countOptions(o);
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: ListTile(
-                        title: Text('Order #${o.id}',
-                            style: const TextStyle(fontWeight: FontWeight.w800)),
-                        subtitle: Text(
-                          '${o.status} • ${o.createdAt} • ${o.items.length} item(s) • $optCount option(s)',
-                        ),
-                        trailing: Text('₱ $total',
-                            style: const TextStyle(fontWeight: FontWeight.w900)),
-                        onTap: () => context.push('/c/orders/${o.id}'),
-                      ),
-                    ),
-                  );
-                }),
-              ],
+              itemCount: active.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              itemBuilder: (_, i) {
+                final o = active[i];
+                final total = _computeOrderTotal(o);
+                final stepIndex = _statusToStepIndex(o.status);
+                return _OrderDashboardCard(
+                  order: o,
+                  total: total,
+                  stepIndex: stepIndex,
+                  onOpenDetails: () => context.push('/c/orders/${o.id}'),
+                );
+              },
             ),
           );
         },
       ),
+    );
+  }
+}
+
+class _OrderDashboardCard extends StatelessWidget {
+  const _OrderDashboardCard({
+    required this.order,
+    required this.total,
+    required this.stepIndex,
+    required this.onOpenDetails,
+  });
+
+  final LatestOrder order;
+  final num total;
+  final int stepIndex;
+  final VoidCallback onOpenDetails;
+
+  String _serviceLabel(LatestOrderItem it) {
+    // We only have service_id in latest API. Show a safe label.
+    // If later your API includes service.name, replace here.
+    return 'Service #${it.serviceId}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(18);
+
+    return Column(
+      children: [
+        // Partner card (matches screenshot structure)
+        _RoundedCard(
+          radius: radius,
+          child: ListTile(
+            dense: true,
+            leading: const Icon(Icons.storefront),
+            title: Text(order.shop?.name ?? 'Laundry partner (placeholder)',
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: Text(
+              order.shop == null
+                  ? 'Rating: 4.8 • 1.2km away'
+                  : 'Tap to view order details',
+              style: const TextStyle(color: Colors.black54),
+            ),
+            onTap: onOpenDetails,
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Items card
+        _RoundedCard(
+          radius: radius,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Items', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+
+                ...order.items.map((it) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_serviceLabel(it),
+                                  style: const TextStyle(fontWeight: FontWeight.w800)),
+                              if (it.options.isNotEmpty)
+                                Text(
+                                  '${it.options.length} add-on(s)',
+                                  style: const TextStyle(color: Colors.black54),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Text('${it.qty}',
+                            style: const TextStyle(fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  );
+                }),
+
+                const Divider(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total', style: TextStyle(fontWeight: FontWeight.w900)),
+                    Text('₱ $total', style: const TextStyle(fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Tracking card
+        _RoundedCard(
+          radius: radius,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Tracking', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+
+                _TrackingStep(label: 'Pickup scheduled', state: _stepState(0, stepIndex)),
+                const Divider(height: 18),
+                _TrackingStep(label: 'Picked up', state: _stepState(1, stepIndex)),
+                const Divider(height: 18),
+                _TrackingStep(label: 'Washing', state: _stepState(2, stepIndex)),
+                const Divider(height: 18),
+                _TrackingStep(label: 'Ready', state: _stepState(3, stepIndex)),
+                const Divider(height: 18),
+                _TrackingStep(label: 'Delivered', state: _stepState(4, stepIndex)),
+
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: onOpenDetails,
+                    child: const Text('Open details'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  _TrackingState _stepState(int step, int current) {
+    if (step < current) return _TrackingState.done;
+    if (step == current) return _TrackingState.current;
+    return _TrackingState.pending;
+  }
+}
+
+class _RoundedCard extends StatelessWidget {
+  const _RoundedCard({required this.child, required this.radius});
+
+  final Widget child;
+  final BorderRadius radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: radius),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: child,
+      ),
+    );
+  }
+}
+
+enum _TrackingState { done, current, pending }
+
+class _TrackingStep extends StatelessWidget {
+  const _TrackingStep({required this.label, required this.state});
+
+  final String label;
+  final _TrackingState state;
+
+  @override
+  Widget build(BuildContext context) {
+    IconData icon;
+    Color? color;
+
+    switch (state) {
+      case _TrackingState.done:
+        icon = Icons.check_circle;
+        color = Colors.black87;
+        break;
+      case _TrackingState.current:
+        icon = Icons.radio_button_checked;
+        color = Colors.black87;
+        break;
+      case _TrackingState.pending:
+        icon = Icons.radio_button_unchecked;
+        color = Colors.black38;
+        break;
+    }
+
+    return Row(
+      children: [
+        Icon(icon, color: color),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: state == _TrackingState.pending ? Colors.black54 : Colors.black87,
+          ),
+        ),
+      ],
     );
   }
 }
