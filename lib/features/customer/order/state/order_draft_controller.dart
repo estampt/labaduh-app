@@ -7,11 +7,20 @@ class DraftSelectedService {
   final DiscoveryServiceRow row;
   final num qty;
 
-  const DraftSelectedService({required this.row, required this.qty});
+  // ✅ v2: selected options/add-ons (IDs)
+  final Set<int> selectedOptionIds;
 
-  DraftSelectedService copyWith({num? qty}) => DraftSelectedService(
+  const DraftSelectedService({
+    required this.row,
+    required this.qty,
+    this.selectedOptionIds = const <int>{},
+  });
+
+  DraftSelectedService copyWith({num? qty, Set<int>? selectedOptionIds}) =>
+      DraftSelectedService(
         row: row,
         qty: qty ?? this.qty,
+        selectedOptionIds: selectedOptionIds ?? this.selectedOptionIds,
       );
 
   String get uom => row.service.baseUnit;
@@ -21,11 +30,56 @@ class DraftSelectedService {
   num get minPrice => row.basePriceMin;
   num get pricePerUom => row.excessPriceMin;
 
+  Map<int, ServiceOptionItem> get _optionIndex {
+    final m = <int, ServiceOptionItem>{};
+    for (final a in row.addons) {
+      m[a.id] = a;
+    }
+    for (final g in row.optionGroups) {
+      for (final it in g.items) {
+        m[it.id] = it;
+      }
+    }
+    return m;
+  }
+
   num get computedPrice {
     final q = qty;
     final minQ = minimum;
-    if (q <= minQ) return minPrice;
-    return minPrice + ((q - minQ) * pricePerUom);
+    final base = (q <= minQ) ? minPrice : (minPrice + ((q - minQ) * pricePerUom));
+
+    // ✅ Add option/add-on totals (use priceMin to match your estimation style)
+    final idx = _optionIndex;
+    final optTotal = selectedOptionIds.fold<num>(
+      0,
+      (sum, id) => sum + (idx[id]?.priceMin ?? 0),
+    );
+
+    return base + optTotal;
+  }
+
+  /// Builds payload option objects expected by CreateOrderItemPayload:
+  /// List<CreateOrderItemOptionPayload>
+  List<CreateOrderItemOptionPayload> buildOptionPayloads() {
+    final idx = _optionIndex;
+    final result = <CreateOrderItemOptionPayload>[];
+
+    for (final id in selectedOptionIds) {
+      final opt = idx[id];
+      if (opt == null) continue;
+
+      final p = opt.priceMin;
+      result.add(
+        CreateOrderItemOptionPayload(
+          serviceOptionId: opt.id,
+          price: p,
+          isRequired: opt.isRequired,
+          computedPrice: p,
+        ),
+      );
+    }
+
+    return result;
   }
 }
 
@@ -83,6 +137,7 @@ class OrderDraftState {
   num get discount => 0;
   num get total => subtotal + deliveryFee + serviceFee - discount;
 
+  /// ✅ Main payload builder used by submit provider
   CreateOrderPayload toCreatePayload() {
     return CreateOrderPayload(
       searchLat: lat,
@@ -102,11 +157,20 @@ class OrderDraftState {
           minPrice: s.minPrice,
           pricePerUom: s.pricePerUom,
           computedPrice: s.computedPrice,
-          options: const [], // add-ons later when API exists
+
+          // ✅ v2: send selected add-ons/options
+          options: s.buildOptionPayloads(),
         );
       }).toList(),
     );
   }
+
+  // ✅ Backward-compat method (some parts of app call draft.CreateOrderPayload())
+  // ignore: non_constant_identifier_names
+ // CreateOrderPayload CreateOrderPayload() => toCreatePayload();
+
+  // ✅ Another common naming pattern
+  CreateOrderPayload createOrderPayload() => toCreatePayload();
 }
 
 class OrderDraftController extends Notifier<OrderDraftState> {
@@ -132,11 +196,48 @@ class OrderDraftController extends Notifier<OrderDraftState> {
   void setDeliveryMode(String v) => state = state.copyWith(deliveryMode: v);
 
   void setAddresses({required int pickupId, required int deliveryId}) {
-    state = state.copyWith(pickupAddressId: pickupId, deliveryAddressId: deliveryId);
+    state = state.copyWith(
+      pickupAddressId: pickupId,
+      deliveryAddressId: deliveryId,
+    );
   }
 
   bool isSelected(int serviceId) =>
       state.services.any((e) => e.row.serviceId == serviceId);
+
+  DraftSelectedService? _selected(int serviceId) {
+    try {
+      return state.services.firstWhere((e) => e.row.serviceId == serviceId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Set<int> _initialOptionSelection(DiscoveryServiceRow row) {
+    final selected = <int>{};
+
+    // Default-selected items
+    for (final a in row.addons) {
+      if (a.isDefaultSelected) selected.add(a.id);
+    }
+    for (final g in row.optionGroups) {
+      for (final it in g.items) {
+        if (it.isDefaultSelected) selected.add(it.id);
+      }
+    }
+
+    // Ensure required groups have something selected
+    for (final g in row.optionGroups) {
+      if (!g.isRequired || g.items.isEmpty) continue;
+      final has = g.items.any((it) => selected.contains(it.id));
+      if (!has) {
+        final sorted = [...g.items]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        selected.add(sorted.first.id);
+      }
+    }
+
+    return selected;
+  }
 
   void toggleService(DiscoveryServiceRow row) {
     final list = [...state.services];
@@ -145,7 +246,13 @@ class OrderDraftController extends Notifier<OrderDraftState> {
     if (idx >= 0) {
       list.removeAt(idx);
     } else {
-      list.add(DraftSelectedService(row: row, qty: row.baseQty));
+      list.add(
+        DraftSelectedService(
+          row: row,
+          qty: row.baseQty,
+          selectedOptionIds: _initialOptionSelection(row),
+        ),
+      );
     }
 
     state = state.copyWith(services: list);
@@ -154,6 +261,104 @@ class OrderDraftController extends Notifier<OrderDraftState> {
   void setQty(int serviceId, num qty) {
     final list = state.services.map((e) {
       if (e.row.serviceId == serviceId) return e.copyWith(qty: qty);
+      return e;
+    }).toList();
+
+    state = state.copyWith(services: list);
+  }
+
+  // --------------------------------------------------------------------------
+  // ✅ v2: Options selection API used by OrderServicesScreen
+  // --------------------------------------------------------------------------
+
+  void toggleAddonOption({
+    required int serviceId,
+    required ServiceOptionItem option,
+  }) {
+    final current = _selected(serviceId);
+    if (current == null) return;
+
+    final next = {...current.selectedOptionIds};
+    final already = next.contains(option.id);
+
+    // For add-ons: if not multi-select, restrict within same group_key bucket
+    final bucket = option.groupKey ?? '__addon__';
+    final bucketIds = current.row.addons
+        .where((a) => (a.groupKey ?? '__addon__') == bucket)
+        .map((a) => a.id)
+        .toSet();
+
+    if (!option.isMultiSelect) {
+      if (already) {
+        // if required bucket, don't allow removing last selected
+        final requiredBucket = current.row.addons
+            .where((a) => (a.groupKey ?? '__addon__') == bucket)
+            .any((a) => a.isRequired);
+        if (requiredBucket) {
+          final remaining = next.difference({option.id}).intersection(bucketIds);
+          if (remaining.isEmpty) return;
+        }
+        next.remove(option.id);
+      } else {
+        next.removeAll(bucketIds);
+        next.add(option.id);
+      }
+    } else {
+      if (already) {
+        if (option.isRequired) {
+          final remaining = next.difference({option.id}).intersection(bucketIds);
+          if (remaining.isEmpty) return;
+        }
+        next.remove(option.id);
+      } else {
+        next.add(option.id);
+      }
+    }
+
+    _replace(serviceId, current.copyWith(selectedOptionIds: next));
+  }
+
+  void toggleGroupedOption({
+    required int serviceId,
+    required DiscoveryOptionGroup group,
+    required ServiceOptionItem option,
+  }) {
+    final current = _selected(serviceId);
+    if (current == null) return;
+
+    final next = {...current.selectedOptionIds};
+    final already = next.contains(option.id);
+    final groupIds = group.items.map((e) => e.id).toSet();
+
+    if (!group.isMultiSelect) {
+      if (already) {
+        if (group.isRequired) {
+          final remaining = next.difference({option.id}).intersection(groupIds);
+          if (remaining.isEmpty) return;
+        }
+        next.remove(option.id);
+      } else {
+        next.removeAll(groupIds);
+        next.add(option.id);
+      }
+    } else {
+      if (already) {
+        if (group.isRequired) {
+          final remaining = next.difference({option.id}).intersection(groupIds);
+          if (remaining.isEmpty) return;
+        }
+        next.remove(option.id);
+      } else {
+        next.add(option.id);
+      }
+    }
+
+    _replace(serviceId, current.copyWith(selectedOptionIds: next));
+  }
+
+  void _replace(int serviceId, DraftSelectedService next) {
+    final list = state.services.map((e) {
+      if (e.row.serviceId == serviceId) return next;
       return e;
     }).toList();
 

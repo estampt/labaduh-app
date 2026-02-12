@@ -56,22 +56,30 @@ class OrderServicesScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
 
                   ...rows.map((row) {
-                    final serviceId = row.service.id;
                     final isSelected = ctrl.isSelected(row.serviceId);
 
-                    // find selected qty from draft (if selected)
+                    // find selected qty + selected options from draft (if selected)
                     final selected = draft.services
                         .where((e) => e.row.serviceId == row.serviceId)
                         .toList();
 
-                    final int qty = isSelected 
-                    ? selected.first.qty.toInt() 
-                    : row.baseQty.toInt();
+                    final int qty = isSelected
+                        ? selected.first.qty.toInt()
+                        : row.baseQty.toInt();
 
                     final unit = _unitLabelFromBaseUnit(row.service.baseUnit);
+
+                    // computedPrice now includes selected options
                     final price = isSelected
                         ? selected.first.computedPrice
                         : _estimatePriceForRow(row, qty);
+
+                    final selectedOptionIds = isSelected
+                        ? selected.first.selectedOptionIds
+                        : const <int>{};
+
+                    final hasOptions =
+                        row.addons.isNotEmpty || row.optionGroups.isNotEmpty;
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -94,7 +102,8 @@ class OrderServicesScreen extends ConsumerWidget {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           row.service.name,
@@ -106,7 +115,8 @@ class OrderServicesScreen extends ConsumerWidget {
                                         const SizedBox(height: 2),
                                         Text(
                                           'Base: ${row.baseQty} $unit',
-                                          style: const TextStyle(color: Colors.black54),
+                                          style: const TextStyle(
+                                              color: Colors.black54),
                                         ),
                                       ],
                                     ),
@@ -119,7 +129,8 @@ class OrderServicesScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 10),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     '₱ $price',
@@ -132,7 +143,8 @@ class OrderServicesScreen extends ConsumerWidget {
                                     value: qty,
                                     min: row.baseQty,
                                     suffix: unit,
-                                    onChanged: (newQty) => ctrl.setQty(row.serviceId, newQty),
+                                    onChanged: (newQty) =>
+                                        ctrl.setQty(row.serviceId, newQty),
                                   ),
                                 ],
                               ),
@@ -141,9 +153,30 @@ class OrderServicesScreen extends ConsumerWidget {
                                   padding: const EdgeInsets.only(top: 8),
                                   child: Text(
                                     'Excess: ₱ ${row.excessPriceMin} per extra $unit',
-                                    style: const TextStyle(color: Colors.black54),
+                                    style:
+                                        const TextStyle(color: Colors.black54),
                                   ),
                                 ),
+
+                              // ✅ NEW: Options UI directly under service (keeps style simple)
+                              if (hasOptions) ...[
+                                const SizedBox(height: 12),
+                                _ServiceOptionsBlock(
+                                  row: row,
+                                  enabled: isSelected,
+                                  selectedOptionIds: selectedOptionIds,
+                                  onToggleAddon: (opt) => ctrl.toggleAddonOption(
+                                    serviceId: row.serviceId,
+                                    option: opt,
+                                  ),
+                                  onToggleGrouped: (group, opt) =>
+                                      ctrl.toggleGroupedOption(
+                                    serviceId: row.serviceId,
+                                    group: group,
+                                    option: opt,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -169,6 +202,102 @@ class OrderServicesScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _ServiceOptionsBlock extends StatelessWidget {
+  const _ServiceOptionsBlock({
+    required this.row,
+    required this.enabled,
+    required this.selectedOptionIds,
+    required this.onToggleAddon,
+    required this.onToggleGrouped,
+  });
+
+  final DiscoveryServiceRow row;
+  final bool enabled;
+  final Set<int> selectedOptionIds;
+
+  final void Function(ServiceOptionItem opt) onToggleAddon;
+  final void Function(DiscoveryOptionGroup group, ServiceOptionItem opt)
+      onToggleGrouped;
+
+  String _priceLabel(ServiceOptionItem o) {
+    final p = o.priceMin;
+    return p == 0 ? '' : ' • ₱ $p';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final disabledColor = Colors.black38;
+
+    Widget title(String t) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            t,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: enabled ? Colors.black87 : disabledColor,
+            ),
+          ),
+        );
+
+    List<ServiceOptionItem> sorted(List<ServiceOptionItem> xs) {
+      final copy = [...xs];
+      copy.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      return copy;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (row.addons.isNotEmpty) ...[
+          title('Add-ons'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: sorted(row.addons).map((opt) {
+              final isOn = selectedOptionIds.contains(opt.id);
+              return FilterChip(
+                label: Text('${opt.name}${_priceLabel(opt)}'),
+                selected: isOn,
+                onSelected: enabled ? (_) => onToggleAddon(opt) : null,
+              );
+            }).toList(),
+          ),
+        ],
+        if (row.optionGroups.isNotEmpty) ...[
+          if (row.addons.isNotEmpty) const SizedBox(height: 12),
+          ...row.optionGroups.map((g) {
+            final header = '${g.groupKey ?? 'Options'}'
+                '${g.isRequired ? ' (required)' : ''}'
+                '${g.isMultiSelect ? ' (multi)' : ''}';
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title(header),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: sorted(g.items).map((opt) {
+                      final isOn = selectedOptionIds.contains(opt.id);
+                      return FilterChip(
+                        label: Text('${opt.name}${_priceLabel(opt)}'),
+                        selected: isOn,
+                        onSelected: enabled ? (_) => onToggleGrouped(g, opt) : null,
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
     );
   }
 }

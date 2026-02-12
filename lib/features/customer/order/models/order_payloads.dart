@@ -45,6 +45,7 @@ class CreateOrderItemPayload {
   final num pricePerUom;
   final num computedPrice;
 
+  // ✅ v2: option payload objects
   final List<CreateOrderItemOptionPayload> options;
 
   CreateOrderItemPayload({
@@ -72,6 +73,7 @@ class CreateOrderItemPayload {
       };
 }
 
+// ✅ Must be a CLASS (type) so it can be used as List<CreateOrderItemOptionPayload>
 class CreateOrderItemOptionPayload {
   final int serviceOptionId;
   final num price;
