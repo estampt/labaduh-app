@@ -2,65 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/ui/service_icons.dart';
-
+import '../models/discovery_service_models.dart';
 import '../state/order_draft_controller.dart';
 import '../state/order_submit_provider.dart';
 import 'widgets/sticky_bottom_bar.dart';
-import 'widgets/section_title.dart';
 
-class OrderReviewScreen extends ConsumerWidget {
+class OrderReviewScreen extends ConsumerStatefulWidget {
   const OrderReviewScreen({super.key});
 
-  String _unitLabel(String baseUnit) {
-    final u = baseUnit.toLowerCase().trim();
-    return (u == 'kg' || u == 'kilo' || u == 'kilogram') ? 'KG' : 'pc';
-  }
+  @override
+  ConsumerState<OrderReviewScreen> createState() => _OrderReviewScreenState();
+}
 
-  String _pickupSubtitle(String pickupMode) {
-    switch (pickupMode) {
-      case 'asap':
-        return 'Pickup ASAP selected (placeholder)';
-      case 'tomorrow':
-        return 'Tomorrow pickup selected (placeholder)';
-      case 'schedule':
-        return 'Pickup schedule selected (placeholder)';
-      default:
-        return 'Pickup schedule selected (placeholder)';
-    }
-  }
-
-  Widget _card({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F6FB),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: child,
-    );
-  }
-
-  Widget _feeRow(String label, String value, {bool bold = false}) {
-    final style = TextStyle(
-      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: style)),
-          Text(value, style: style),
-        ],
-      ),
-    );
-  }
+class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
+  bool _isLoading = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final draft = ref.watch(orderDraftControllerProvider);
-    final submitState = ref.watch(orderSubmitProvider);
-    final isLoading = submitState.isLoading;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Review Order')),
@@ -69,109 +28,52 @@ class OrderReviewScreen extends ConsumerWidget {
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             children: [
-              const SectionTitle('Services'),
-              const SizedBox(height: 10),
+              const Text(
+                'Services',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
 
-              // ✅ Services list with icons
               ...draft.services.map((s) {
-                final unit = _unitLabel(s.row.service.baseUnit);
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _card(
-                    child: Row(
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Icon box (same icon system as Select Services)
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            ServiceIcons.resolve(s.row.service.icon),
-                            size: 22,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              s.row.service.name,
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            Text('₱ ${s.computedPrice}'),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-
-                        // Name + qty
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                s.row.service.name,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${s.qty} $unit',
-                                style: const TextStyle(color: Colors.black54),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Price
+                        const SizedBox(height: 4),
                         Text(
-                          '₱ ${s.computedPrice}',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
+                          'Qty: ${s.qty} ${s.row.service.baseUnit}',
+                          style: const TextStyle(color: Colors.black54),
                         ),
+
+                        // ✅ NEW: show selected add-ons / options under the service
+                        if (s.selectedOptionIds.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _SelectedOptionsChips(
+                            service: s.row,
+                            selectedIds: s.selectedOptionIds,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 );
               }),
 
-              const SizedBox(height: 12),
-              const SectionTitle('Fees'),
-              const SizedBox(height: 10),
-
-              _card(
-                child: Column(
-                  children: [
-                    _feeRow('Subtotal', '₱ ${draft.subtotal}'),
-                    _feeRow('Delivery', '₱ ${draft.deliveryFee}'),
-                    _feeRow('Service fee', '₱ ${draft.serviceFee}'),
-                    const Divider(height: 18),
-                    _feeRow('Total', '₱ ${draft.total}', bold: true),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 18),
-              const SectionTitle('Pickup details'),
-              const SizedBox(height: 10),
-
-              _card(
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today_outlined, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Set pickup address',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _pickupSubtitle(draft.pickupMode),
-                            style: const TextStyle(color: Colors.black54),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 16),
+              _TotalsSection(draft: draft),
             ],
           ),
 
@@ -180,26 +82,102 @@ class OrderReviewScreen extends ConsumerWidget {
             child: StickyBottomBar(
               title: 'Total: ₱ ${draft.total}',
               subtitle: 'Next: find laundry partner',
-              buttonText: isLoading ? 'Sending...' : 'Confirm & Find',
-              enabled: !isLoading && draft.services.isNotEmpty,
+              buttonText: _isLoading ? 'Sending...' : 'Confirm & Find',
+              enabled: !_isLoading && draft.services.isNotEmpty,
               onPressed: () async {
-                if (isLoading) return;
+                if (_isLoading) return;
+
+                setState(() => _isLoading = true);
 
                 final submitCtrl = ref.read(orderSubmitProvider.notifier);
 
                 try {
                   final order = await submitCtrl.submit();
-                  // ignore: use_build_context_synchronously
-                  context.push('/c/order/matching', extra: order.id);
+                  if (!mounted) return;
+                   context.go('/c/orders');
                 } catch (e) {
-                  // ignore: use_build_context_synchronously
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Failed to send order: $e')),
                   );
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
                 }
               },
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedOptionsChips extends StatelessWidget {
+  const _SelectedOptionsChips({
+    required this.service,
+    required this.selectedIds,
+  });
+
+  final DiscoveryServiceRow service;
+  final Set<int> selectedIds;
+
+  @override
+  Widget build(BuildContext context) {
+    final allOptions = <ServiceOptionItem>[
+      ...service.addons,
+      ...service.optionGroups.expand((g) => g.items),
+    ];
+
+    final selected = allOptions.where((o) => selectedIds.contains(o.id)).toList();
+    if (selected.isEmpty) return const SizedBox.shrink();
+
+    selected.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: selected.map((o) {
+        final price = o.priceMin;
+        final label = price == 0 ? o.name : '${o.name} • ₱ $price';
+
+        return Chip(label: Text(label));
+      }).toList(),
+    );
+  }
+}
+
+class _TotalsSection extends StatelessWidget {
+  const _TotalsSection({required this.draft});
+
+  final OrderDraftState draft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _row('Subtotal', draft.subtotal),
+            _row('Delivery Fee', draft.deliveryFee),
+            _row('Service Fee', draft.serviceFee),
+            _row('Discount', -draft.discount),
+            const Divider(),
+            _row('Total', draft.total, bold: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, num value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w700 : null)),
+          Text('₱ $value', style: TextStyle(fontWeight: bold ? FontWeight.w700 : null)),
         ],
       ),
     );

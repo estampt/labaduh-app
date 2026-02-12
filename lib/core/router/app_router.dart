@@ -18,7 +18,7 @@ import '../../features/auth/presentation/signup_screen.dart';
 
 import '../../features/customer/shell/presentation/customer_shell.dart';
 import '../../features/customer/home/presentation/customer_home_tab.dart';
-import '../../features/customer/orders/presentation/orders_tab.dart';
+import '../../features/customer/order/presentation/orders_tab.dart';
 import '../../features/customer/orders/presentation/order_detail_screen.dart';
 import '../../features/customer/wallet/presentation/wallet_tab.dart';
 import '../../features/customer/profile/presentation/profile_tab.dart';
