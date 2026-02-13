@@ -10,7 +10,7 @@ class ServiceCatalogItem {
   final num basePrice;
   final num excessPerUnit;
   final String? icon;
-
+  
   const ServiceCatalogItem({
     required this.id,
     required this.name,

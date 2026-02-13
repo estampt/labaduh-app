@@ -29,48 +29,19 @@ class OrdersTab extends ConsumerStatefulWidget {
 
 class _OrdersTabState extends ConsumerState<OrdersTab> {
   Timer? _timer;
-  static const _pollInterval = Duration(seconds: 60);
+  static const _pollInterval = Duration(seconds: 8);
 
-  void _startPolling() {
-    if (_timer != null) return;
+  @override
+  void initState() {
+    super.initState();
     _timer = Timer.periodic(_pollInterval, (_) {
       ref.read(latestOrdersProvider.notifier).refresh();
     });
   }
 
-  void _stopPolling() {
-    _timer?.cancel();
-    _timer = null;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Start polling by default. We'll stop automatically when there are no active orders.
-    _startPolling();
-
-    // Stop polling when there are no active orders.
-    // Polling will resume after a manual refresh if active orders appear again.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      ref.listen(latestOrdersProvider, (prev, next) {
-        next.whenData((state) {
-          final hasActive = state.orders.any((o) => _isActiveStatus(o.status));
-          if (hasActive) {
-            _startPolling();
-          } else {
-            _stopPolling();
-          }
-        });
-      });
-    });
-  }
-
   @override
   void dispose() {
-    _stopPolling();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -248,39 +219,28 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
           final active = state.orders.where((o) => _isActiveStatus(o.status)).toList();
 
           if (active.isEmpty) {
-            // Keep pull-to-refresh available even when empty.
-            return RefreshIndicator(
-              onRefresh: () => ref.read(latestOrdersProvider.notifier).refresh(),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
+            return Center(
+              child: Padding(
                 padding: const EdgeInsets.all(24),
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 48),
-                      const Text(
-                        'No active orders',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: _openHistorySheet,
-                        child: const Text('View history'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () => context.go('/c/home'),
-                        child: const Text('Go to Home'),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Pull down to refresh.',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
-                      ),
-                    ],
-                  ),
-                ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'No active orders',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _openHistorySheet,
+                      child: const Text('View history'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => context.go('/c/home'),
+                      child: const Text('Go to Home'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
@@ -295,7 +255,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                 final o = active[i];
                 final total = _computeOrderTotal(o);
                 final stepIndex = _statusToStepIndex(o.status);
-
+                
                 return _OrderDashboardCard(
                   order: o,
                   total: total,
@@ -303,7 +263,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                   onOpenDetails: () => context.push('/c/orders/${o.id}'),
                   onChatVendor: (o.partner == null) 
                       ? null
-                      : () => context.push('/messages/${o.partner!.id}'),
+                      : () => context.push('/messages/order/${o.id}'),
                   onCompleteOrder: (o.status.toLowerCase().trim() == 'delivered')
                       ? () async {
                           try {
@@ -373,13 +333,70 @@ class _OrderDashboardCard extends StatelessWidget {
     return 'Option #${o.id}';
   }
 
-  @override
+  
+
+  num _num(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v;
+    return num.tryParse(v.toString()) ?? 0;
+  }
+
+  /// Subtotal: sum of item prices + option prices (no fees/discounts).
+  num _computeSubtotal(LatestOrder o) {
+    num sum = 0;
+    for (final it in o.items) {
+      sum += _num(it.displayPrice);
+      for (final opt in it.options) {
+        sum += _num(opt.displayPrice);
+      }
+    }
+    return sum;
+  }
+
+  /// Try-read common fee fields safely (won't crash if field doesn't exist).
+  num _readDeliveryFee(LatestOrder o) {
+    final d = o as dynamic;
+    try { final v = d.deliveryFee; return _num(v); } catch (_) {}
+    try { final v = d.delivery_fee; return _num(v); } catch (_) {}
+    try { final v = d.delivery_fee_amount; return _num(v); } catch (_) {}
+    return 0;
+  }
+
+  num _readServiceFee(LatestOrder o) {
+    final d = o as dynamic;
+    try { final v = d.serviceFee; return _num(v); } catch (_) {}
+    try { final v = d.service_fee; return _num(v); } catch (_) {}
+    try { final v = d.platformFee; return _num(v); } catch (_) {}
+    try { final v = d.platform_fee; return _num(v); } catch (_) {}
+    return 0;
+  }
+
+  num _readDiscount(LatestOrder o) {
+    final d = o as dynamic;
+    try { final v = d.discount; return _num(v); } catch (_) {}
+    try { final v = d.discountAmount; return _num(v); } catch (_) {}
+    try { final v = d.discount_amount; return _num(v); } catch (_) {}
+    return 0;
+  }
+
+  String _fmtMoney(num v) {
+    // Match your UI: show no decimals when whole number
+    if (v % 1 == 0) return v.toStringAsFixed(0);
+    return v.toStringAsFixed(2);
+  }
+
+@override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18);
     final shop = order.vendorShop ?? order.shop; // prefer vendor_shop for distance/rating
     final rating = shop?.avgRating;
     final dist = shop?.distanceKm;
     final ratingCount = shop?.ratingsCount;
+
+    final subtotal = _computeSubtotal(order);
+    final deliveryFee = _readDeliveryFee(order);
+    final serviceFee = _readServiceFee(order);
+    final discount = _readDiscount(order);
 
     return Column(
       children: [
@@ -390,150 +407,193 @@ class _OrderDashboardCard extends StatelessWidget {
             dense: true,
             leading: _ShopAvatar(url: shop?.profilePhotoUrl),
             title: Text(
-              shop?.name ?? 'Searching for available Labaduh partners...',
+              shop?.name ?? 'Laundry partner (placeholder)',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             subtitle: Text(
               _partnerSubtitle(rating: rating, ratingCount: ratingCount, distanceKm: dist),
               style: const TextStyle(color: Colors.black54),
             ),
-            //onTap: onOpenDetails, // Optional: open details when tapping partner card as well
+            onTap: onOpenDetails,
           ),
         ),
         const SizedBox(height: 10),
 
-        
-            // Items card (show item details + options)
-          _RoundedCard(
-            radius: radius,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+        // Items card (show item details + options)
+        // Items card (show item details + options)
+        _RoundedCard(
+          radius: radius,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
 
-                  // ---------- HEADER ----------
-                  Row(
+                // ---------- HEADER ----------
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+
+                    // Order Number (left)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+
+                          Text(
+                            'Order #${order.id}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          Text(
+                            'Order placed',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Date (rightmost)
+                    Text(
+                      _formatDate(order.createdAt),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ---------- SPACE BEFORE ITEMS ----------
+                const SizedBox(height: 16),
+
+                // Divider (optional but nice)
+                Divider(
+                  height: 1,
+                  color: Colors.grey.withOpacity(0.25),
+                ),
+
+                const SizedBox(height: 12),
+
+                // 👉 Your items list continues below…
+
+
+                ...order.items.map((it) {
+                final uom = (it.uom ?? '').trim();
+                final qtyLabel =
+                    uom.isEmpty ? '${it.qty}' : '${it.qty} ${uom.toUpperCase()}';
+
+                final price = it.displayPrice ?? '0.00';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
-                      // Order Number (left)
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-
-                            Text(
-                              'Order #${order.id}',
+                      // ---------- MAIN LINE ----------
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _serviceLabel(it),
                               style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 17,
-                                letterSpacing: 0.2,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
+                          ),
 
-                            const SizedBox(height: 6),
-
-                            Text(
-                              'Order placed',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 12,
-                              ),
+                          // PRICE right-aligned
+                          Text(
+                            '₱ $price',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
 
-                      // Date (rightmost)
-                      Text(
-                        _formatDate(order.createdAt),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // ---------- SPACE BEFORE ITEMS ----------
-                  const SizedBox(height: 16),
-
-                  // Divider (optional but nice)
-                  Divider(
-                    height: 1,
-                    color: Colors.grey.withOpacity(0.25),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                const Text('Items', style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 10),
-
-                ...order.items.map((it) {
-                  final uom = (it.uom ?? '').trim();
-                  final qtyLabel = uom.isEmpty ? '${it.qty}' : '${it.qty} ${uom.toUpperCase()}';
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _serviceLabel(it),
-                                style: const TextStyle(fontWeight: FontWeight.w800),
-                              ),
+                      // ---------- UOM / DESCRIPTION ----------
+                      if (qtyLabel.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Qty: $qtyLabel',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
                             ),
-                            Text(qtyLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₱ ${it.displayPrice ?? '0.00'}',
-                          style: const TextStyle(color: Colors.black54),
+                          ),
                         ),
 
-                        if (it.options.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          // options list (like services screen: name left, price right)
-                          ...it.options.map((o) {
-                            final price = o.displayPrice ?? '0.00';
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _optionLabel(o),
-                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      // ---------- OPTIONS ----------
+                      if (it.options.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+
+                        ...it.options.map((o) {
+                          final optPrice = o.displayPrice ?? '0.00';
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _optionLabel(o),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  Text(
-                                    '₱ $price',
-                                    style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                                Text(
+                                  '₱ $optPrice',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
                                   ),
-                                ],
-                              ),
-                            );
-                          }),
-                        ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                       ],
-                    ),
-                  );
-                }),
+                    ],
+                  ),
+                );
+              }),
+
 
                 const Divider(height: 22),
+
+                // ---- Breakdown (Subtotal / Fees / Discount) ----
+                _AmountRow(label: 'Subtotal', value: subtotal),
+                _AmountRow(label: 'Delivery Fee', value: deliveryFee),
+                _AmountRow(label: 'Service Fee', value: serviceFee),
+                _AmountRow(
+                  label: 'Discount',
+                  value: discount == 0 ? 0 : -discount.abs(),
+                ),
+
+                const SizedBox(height: 6),
+                Divider(height: 1, color: Colors.grey.withOpacity(0.25)),
+                const SizedBox(height: 10),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Total', style: TextStyle(fontWeight: FontWeight.w900)),
-                    Text('₱ $total', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text('₱ ${_fmtMoney(total)}', style: const TextStyle(fontWeight: FontWeight.w900)),
                   ],
                 ),
               ],
@@ -589,7 +649,13 @@ class _OrderDashboardCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                 
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: onOpenDetails,
+                    child: const Text('Open details'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -616,7 +682,7 @@ class _OrderDashboardCard extends StatelessWidget {
       parts.add('${distanceKm.toStringAsFixed(2)}km away');
     }
 
-    if (parts.isEmpty) return 'Please wait...';
+    if (parts.isEmpty) return 'Tap to view order details';
     return parts.join(' • ');
   }
 
@@ -710,6 +776,81 @@ class _TrackingStep extends StatelessWidget {
   }
 }
 
+class _AmountRow extends StatelessWidget {
+  const _AmountRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final num value;
+
+  String _fmt(num v) {
+    if (v % 1 == 0) return v.toStringAsFixed(0);
+    return v.toStringAsFixed(2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNegative = value < 0;
+    final absVal = value.abs();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontSize: 13,
+            ),
+          ),
+          Text(
+            '${isNegative ? '-' : ''}₱ ${_fmt(absVal)}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+double _money(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0;
+  return 0;
+}
+
+String _currencySymbol(String? code) {
+  switch ((code ?? '').toUpperCase()) {
+    case 'SGD':
+      return 'S\$';
+    case 'PHP':
+      return '₱';
+    case 'USD':
+      return '\$';
+    case 'EUR':
+      return '€';
+    case 'GBP':
+      return '£';
+    default:
+      // fallback: show code itself if unknown (e.g. "MYR")
+      return (code == null || code.isEmpty) ? '₱' : '$code ';
+  }
+}
+
+String _fmtMoney(String currency, double amount) {
+  final sym = _currencySymbol(currency);
+  return '$sym ${amount.toStringAsFixed(2)}';
+}
+
 String _formatDate(String? dateStr) {
   if (dateStr == null || dateStr.isEmpty) return '-';
 
@@ -718,4 +859,3 @@ String _formatDate(String? dateStr) {
 
   return DateFormat('MMM dd, yyyy • hh:mm a').format(date);
 }
-

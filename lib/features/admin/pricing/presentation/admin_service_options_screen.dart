@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 
 import '../../../../../core/network/api_client.dart';
-import '../admin_services_screen.dart'; // for adminServicesProvider invalidation
+import 'admin_services_screen.dart'; // for adminServicesProvider invalidation
 
 enum OptionKind { option, addon }
 

@@ -34,9 +34,20 @@ class LatestOrder {
     required this.createdAt,
     required this.updatedAt,
     required this.items,
+
+    // totals (older/newer)
     this.estimatedTotal,
     this.finalTotal,
     this.total,
+
+    // ✅ NEW: currency + fee breakdown (API keys: currency, subtotal, delivery_fee, service_fee, discount, total)
+    this.currency,
+    this.subtotal,
+    this.deliveryFee,
+    this.serviceFee,
+    this.discount,
+
+    // partner info
     this.vendorShop,
     this.acceptedShop,
     this.shop,
@@ -49,23 +60,44 @@ class LatestOrder {
   final String createdAt;
   final String updatedAt;
 
-  // totals (new format)
+  // totals (new format - string)
   final String? total;
 
-  // totals (old format)
+  // totals (old format - string)
   final String? estimatedTotal;
   final String? finalTotal;
+
+  // ✅ NEW: fee breakdown (numeric; parsed from string/num)
+  final String? currency;
+  final num? subtotal;
+  final num? deliveryFee;
+  final num? serviceFee;
+  final num? discount;
 
   // partner info
   final VendorShop? vendorShop;   // new: vendor_shop
   final VendorShop? acceptedShop; // new: accepted_shop (subset)
   final VendorShop? shop;         // old: shop
-
   final LatestDriver? driver;
 
   final List<LatestOrderItem> items;
 
   VendorShop? get partner => vendorShop ?? acceptedShop ?? shop;
+
+  // ✅ Convenience getters for UI (so UI never shows 0 by mistake)
+  String get currencyCode => (currency == null || currency!.trim().isEmpty) ? 'SGD' : currency!.trim();
+
+  num get subtotalAmount => subtotal ?? 0;
+  num get deliveryFeeAmount => deliveryFee ?? 0;
+  num get serviceFeeAmount => serviceFee ?? 0;
+  num get discountAmount => discount ?? 0;
+
+  // Prefer json['total'] (new). Fallback to old total fields.
+  num get totalAmount =>
+      _asNum(total) ??
+      _asNum(finalTotal) ??
+      _asNum(estimatedTotal) ??
+      0;
 
   factory LatestOrder.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'];
@@ -81,16 +113,28 @@ class LatestOrder {
       pricingStatus: (json['pricing_status'] ?? '').toString(),
       createdAt: (json['created_at'] ?? '').toString(),
       updatedAt: (json['updated_at'] ?? '').toString(),
+
+      // totals
       total: json['total']?.toString(),
       estimatedTotal: json['estimated_total']?.toString(),
       finalTotal: json['final_total']?.toString(),
+
+      // ✅ NEW: currency + fees (match your API exactly)
+      currency: json['currency']?.toString(),
+      subtotal: _asNum(json['subtotal']),
+      deliveryFee: _asNum(json['delivery_fee']),
+      serviceFee: _asNum(json['service_fee']),
+      discount: _asNum(json['discount']),
+
       vendorShop: json['vendor_shop'] is Map
           ? VendorShop.fromJson(Map<String, dynamic>.from(json['vendor_shop']))
           : null,
       acceptedShop: json['accepted_shop'] is Map
           ? VendorShop.fromJson(Map<String, dynamic>.from(json['accepted_shop']))
           : null,
-      shop: json['shop'] is Map ? VendorShop.fromJson(Map<String, dynamic>.from(json['shop'])) : null,
+      shop: json['shop'] is Map
+          ? VendorShop.fromJson(Map<String, dynamic>.from(json['shop']))
+          : null,
       driver: json['driver'] is Map
           ? LatestDriver.fromJson(Map<String, dynamic>.from(json['driver']))
           : null,
@@ -98,6 +142,7 @@ class LatestOrder {
     );
   }
 }
+
 
 class LatestOrderItem {
   LatestOrderItem({
