@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../models/discovery_service_models.dart';
 import '../state/order_draft_controller.dart';
 import '../state/order_submit_provider.dart';
+import '../../../onboarding/presentation/loading_screen.dart';
 import 'widgets/sticky_bottom_bar.dart';
+
 
 class OrderReviewScreen extends ConsumerStatefulWidget {
   const OrderReviewScreen({super.key});
@@ -17,32 +19,7 @@ class OrderReviewScreen extends ConsumerStatefulWidget {
 class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
   bool _isLoading = false;
 
-
-  String _pickupMethodLabel(String v) {
-    switch (v) {
-      case 'asap':
-        return 'ASAP (Today)';
-      case 'tomorrow':
-        return 'Tomorrow';
-      case 'schedule':
-        return 'Scheduled';
-      default:
-        return v;
-    }
-  }
-
-  String _deliveryMethodLabel(String v) {
-    switch (v) {
-      case 'pickup_deliver':
-        return 'Pickup & Deliver';
-      case 'walk_in':
-        return 'Walk-in';
-      default:
-        return v;
-    }
-  }
-
-  @override
+   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(orderDraftControllerProvider);
 
@@ -156,8 +133,20 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
 
                 try {
                   final order = await submitCtrl.submit();
+
+                  if (!mounted) return;
+
+                  // 👉 Show loading screen
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const LoadingScreen(),
+                    ),
+                  );
+
+                  // 👉 Redirect to Orders tab
                   if (!mounted) return;
                   context.go('/c/orders');
+
                 } catch (e) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
