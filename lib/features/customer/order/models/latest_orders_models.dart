@@ -1,27 +1,25 @@
 
-// lib/features/customer/order/models/latest_orders_models.dart
-//
-// Models for: GET /api/v1/customer/orders/latest
-// Backward-compatible with the older lightweight response (shop/driver + item.price + option.name)
-// and the newer expanded response (accepted_shop/vendor_shop + item.computed_price + option.service_option_id).
-//
-// NOTE: Keep fields nullable where backend may omit them.
+// Updated models for /api/v1/customer/orders/latest
+// Supports BOTH older format and latest format that includes nested:
+// - order.vendor_shop / accepted_shop
+// - item.service {id,name,description}
+// - option.service_option {id,name,description}
 
 class LatestOrdersResponse {
-  final List<LatestOrder> data;
-  final String? cursor;
-
-  const LatestOrdersResponse({
+  LatestOrdersResponse({
     required this.data,
     required this.cursor,
   });
 
+  final List<LatestOrder> data;
+  final String? cursor;
+
   factory LatestOrdersResponse.fromJson(Map<String, dynamic> json) {
-    final raw = (json['data'] as List?) ?? const [];
+    final raw = json['data'];
+    final list = (raw is List) ? raw : const <dynamic>[];
     return LatestOrdersResponse(
-      data: raw
-          .whereType<Map>()
-          .map((e) => LatestOrder.fromJson(Map<String, dynamic>.from(e)))
+      data: list
+          .map((e) => LatestOrder.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       cursor: json['cursor']?.toString(),
     );
@@ -29,107 +27,212 @@ class LatestOrdersResponse {
 }
 
 class LatestOrder {
+  LatestOrder({
+    required this.id,
+    required this.status,
+    required this.pricingStatus,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.items,
+    this.estimatedTotal,
+    this.finalTotal,
+    this.total,
+    this.vendorShop,
+    this.acceptedShop,
+    this.shop,
+    this.driver,
+  });
+
   final int id;
-
-  final int? customerId;
   final String status;
-  final String? pricingStatus;
+  final String pricingStatus;
+  final String createdAt;
+  final String updatedAt;
 
-  // Totals (new response has "total"/"subtotal"/fees)
-  final String? subtotal;
-  final String? deliveryFee;
-  final String? serviceFee;
-  final String? discount;
+  // totals (new format)
   final String? total;
 
-  // Old response had estimated_total/final_total at order level.
+  // totals (old format)
   final String? estimatedTotal;
   final String? finalTotal;
 
-  final String createdAt;
-  final String? updatedAt;
+  // partner info
+  final VendorShop? vendorShop;   // new: vendor_shop
+  final VendorShop? acceptedShop; // new: accepted_shop (subset)
+  final VendorShop? shop;         // old: shop
 
-  // Partner/shop (old: shop, new: vendor_shop or accepted_shop)
-  final OrderShopSummary? _shop; // old key: "shop"
-  final OrderShopSummary? vendorShop; // new key: "vendor_shop"
-  final OrderShopSummary? acceptedShop; // new key: "accepted_shop"
-
-  // Driver (old: driver)
-  final OrderDriverSummary? driver;
+  final LatestDriver? driver;
 
   final List<LatestOrderItem> items;
 
-  const LatestOrder({
-    required this.id,
-    required this.status,
-    required this.createdAt,
-    required this.items,
-    this.customerId,
-    this.pricingStatus,
-    this.subtotal,
-    this.deliveryFee,
-    this.serviceFee,
-    this.discount,
-    this.total,
-    this.estimatedTotal,
-    this.finalTotal,
-    this.updatedAt,
-    this.vendorShop,
-    this.acceptedShop,
-    OrderShopSummary? shop,
-    this.driver,
-  }) : _shop = shop;
-
-  /// Unified shop accessor for UI code that previously used `order.shop`.
-  /// Priority: vendorShop -> acceptedShop -> legacy shop.
-  OrderShopSummary? get shop => vendorShop ?? acceptedShop ?? _shop;
-
-  /// Numeric-ish total that prefers the latest canonical "total" if present.
-  /// (UI can still use its own fallback computations.)
-  String? get displayTotal => total ?? finalTotal ?? estimatedTotal;
+  VendorShop? get partner => vendorShop ?? acceptedShop ?? shop;
 
   factory LatestOrder.fromJson(Map<String, dynamic> json) {
-    final itemsRaw = (json['items'] as List?) ?? const [];
+    final rawItems = json['items'];
+    final items = (rawItems is List)
+        ? rawItems
+            .map((e) => LatestOrderItem.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList()
+        : <LatestOrderItem>[];
 
     return LatestOrder(
       id: _asInt(json['id']) ?? 0,
-      customerId: _asInt(json['customer_id']),
       status: (json['status'] ?? '').toString(),
-      pricingStatus: json['pricing_status']?.toString(),
-      subtotal: json['subtotal']?.toString(),
-      deliveryFee: json['delivery_fee']?.toString(),
-      serviceFee: json['service_fee']?.toString(),
-      discount: json['discount']?.toString(),
+      pricingStatus: (json['pricing_status'] ?? '').toString(),
+      createdAt: (json['created_at'] ?? '').toString(),
+      updatedAt: (json['updated_at'] ?? '').toString(),
       total: json['total']?.toString(),
       estimatedTotal: json['estimated_total']?.toString(),
       finalTotal: json['final_total']?.toString(),
-      createdAt: (json['created_at'] ?? '').toString(),
-      updatedAt: json['updated_at']?.toString(),
-      shop: json['shop'] is Map ? OrderShopSummary.fromJson(Map<String, dynamic>.from(json['shop'])) : null,
-      vendorShop: json['vendor_shop'] is Map ? OrderShopSummary.fromJson(Map<String, dynamic>.from(json['vendor_shop'])) : null,
-      acceptedShop: json['accepted_shop'] is Map ? OrderShopSummary.fromJson(Map<String, dynamic>.from(json['accepted_shop'])) : null,
-      driver: json['driver'] is Map ? OrderDriverSummary.fromJson(Map<String, dynamic>.from(json['driver'])) : null,
-      items: itemsRaw
-          .whereType<Map>()
-          .map((e) => LatestOrderItem.fromJson(Map<String, dynamic>.from(e)))
-          .toList(),
+      vendorShop: json['vendor_shop'] is Map
+          ? VendorShop.fromJson(Map<String, dynamic>.from(json['vendor_shop']))
+          : null,
+      acceptedShop: json['accepted_shop'] is Map
+          ? VendorShop.fromJson(Map<String, dynamic>.from(json['accepted_shop']))
+          : null,
+      shop: json['shop'] is Map ? VendorShop.fromJson(Map<String, dynamic>.from(json['shop'])) : null,
+      driver: json['driver'] is Map
+          ? LatestDriver.fromJson(Map<String, dynamic>.from(json['driver']))
+          : null,
+      items: items,
     );
   }
 }
 
-class OrderShopSummary {
+class LatestOrderItem {
+  LatestOrderItem({
+    required this.id,
+    required this.serviceId,
+    required this.qty,
+    this.uom,
+    this.price,
+    this.computedPrice,
+    this.service,
+    required this.options,
+  });
+
+  final int id;
+  final int serviceId;
+  final num qty;
+  final String? uom;
+
+  // old format: price
+  final String? price;
+
+  // new format: computed_price
+  final String? computedPrice;
+
+  // new: nested service
+  final LatestService? service;
+
+  final List<LatestOrderItemOption> options;
+
+  String? get displayPrice => computedPrice ?? price;
+
+  factory LatestOrderItem.fromJson(Map<String, dynamic> json) {
+    final rawOptions = json['options'];
+    final opts = (rawOptions is List)
+        ? rawOptions
+            .map((e) => LatestOrderItemOption.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList()
+        : <LatestOrderItemOption>[];
+
+    return LatestOrderItem(
+      id: _asInt(json['id']) ?? 0,
+      serviceId: _asInt(json['service_id']) ?? 0,
+      qty: _asNum(json['qty']) ?? 0,
+      uom: json['uom']?.toString(),
+      price: json['price']?.toString(),
+      computedPrice: json['computed_price']?.toString(),
+      service: json['service'] is Map
+          ? LatestService.fromJson(Map<String, dynamic>.from(json['service']))
+          : null,
+      options: opts,
+    );
+  }
+}
+
+class LatestOrderItemOption {
+  LatestOrderItemOption({
+    required this.id,
+    this.name,
+    this.price,
+    this.computedPrice,
+    this.isRequired,
+    this.serviceOptionId,
+    this.serviceOption,
+  });
+
+  final int id;
+
+  // old format may include name; new format uses nested service_option
+  final String? name;
+
+  // old: price
+  final String? price;
+
+  // new: computed_price
+  final String? computedPrice;
+
+  final bool? isRequired;
+  final int? serviceOptionId;
+
+  // new: nested service_option
+  final LatestServiceOption? serviceOption;
+
+  String? get displayName =>
+      serviceOption?.name ?? ((name?.trim().isNotEmpty ?? false) ? name : null);
+  String? get displayPrice => computedPrice ?? price;
+
+  factory LatestOrderItemOption.fromJson(Map<String, dynamic> json) {
+    return LatestOrderItemOption(
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString(),
+      price: json['price']?.toString(),
+      computedPrice: json['computed_price']?.toString(),
+      isRequired: json['is_required'] == null ? null : _asBool(json['is_required']),
+      serviceOptionId: _asInt(json['service_option_id']),
+      serviceOption: json['service_option'] is Map
+          ? LatestServiceOption.fromJson(Map<String, dynamic>.from(json['service_option']))
+          : null,
+    );
+  }
+}
+
+class LatestService {
+  LatestService({required this.id, required this.name, this.description});
+
   final int id;
   final String name;
+  final String? description;
 
-  final String? profilePhotoUrl;
+  factory LatestService.fromJson(Map<String, dynamic> json) {
+    return LatestService(
+      id: _asInt(json['id']) ?? 0,
+      name: (json['name'] ?? '').toString(),
+      description: json['description']?.toString(),
+    );
+  }
+}
 
-  final double? avgRating;
-  final int? ratingsCount;
+class LatestServiceOption {
+  LatestServiceOption({required this.id, required this.name, this.description});
 
-  // only present in vendor_shop block
-  final double? distanceKm;
+  final int id;
+  final String name;
+  final String? description;
 
-  const OrderShopSummary({
+  factory LatestServiceOption.fromJson(Map<String, dynamic> json) {
+    return LatestServiceOption(
+      id: _asInt(json['id']) ?? 0,
+      name: (json['name'] ?? '').toString(),
+      description: json['description']?.toString(),
+    );
+  }
+}
+
+class VendorShop {
+  VendorShop({
     required this.id,
     required this.name,
     this.profilePhotoUrl,
@@ -138,11 +241,18 @@ class OrderShopSummary {
     this.distanceKm,
   });
 
-  factory OrderShopSummary.fromJson(Map<String, dynamic> json) {
-    return OrderShopSummary(
+  final int id;
+  final String name;
+  final String? profilePhotoUrl;
+  final double? avgRating;
+  final int? ratingsCount;
+  final double? distanceKm;
+
+  factory VendorShop.fromJson(Map<String, dynamic> json) {
+    return VendorShop(
       id: _asInt(json['id']) ?? 0,
       name: (json['name'] ?? '').toString(),
-      profilePhotoUrl: json['profile_photo_url']?.toString(),
+      profilePhotoUrl: (json['profile_photo_url'] ?? json['profilePhotoUrl'])?.toString(),
       avgRating: _asDouble(json['avg_rating']),
       ratingsCount: _asInt(json['ratings_count']),
       distanceKm: _asDouble(json['distance_km']),
@@ -150,124 +260,46 @@ class OrderShopSummary {
   }
 }
 
-class OrderDriverSummary {
-  final int id;
-  final String name;
-
-  const OrderDriverSummary({
+class LatestDriver {
+  LatestDriver({
     required this.id,
     required this.name,
   });
 
-  factory OrderDriverSummary.fromJson(Map<String, dynamic> json) {
-    return OrderDriverSummary(
+  final int id;
+  final String name;
+
+  factory LatestDriver.fromJson(Map<String, dynamic> json) {
+    return LatestDriver(
       id: _asInt(json['id']) ?? 0,
       name: (json['name'] ?? '').toString(),
     );
   }
 }
 
-class LatestOrderItem {
-  final int id;
-  final int serviceId;
-  final num qty;
-
-  // Old: "price"
-  // New: "computed_price" (preferred)
-  final String? price;
-  final String? computedPrice;
-
-  // New (optional, for future UI)
-  final String? uom;
-
-  final List<LatestOrderItemOption> options;
-
-  const LatestOrderItem({
-    required this.id,
-    required this.serviceId,
-    required this.qty,
-    required this.options,
-    this.price,
-    this.computedPrice,
-    this.uom,
-  });
-
-  /// Prefer computed_price when present, otherwise fallback to legacy price.
-  String? get displayPrice => computedPrice ?? price;
-
-  factory LatestOrderItem.fromJson(Map<String, dynamic> json) {
-    final optsRaw = (json['options'] as List?) ?? const [];
-    return LatestOrderItem(
-      id: _asInt(json['id']) ?? 0,
-      serviceId: _asInt(json['service_id']) ?? 0,
-      qty: _asNum(json['qty']) ?? 0,
-      uom: json['uom']?.toString(),
-      computedPrice: json['computed_price']?.toString(),
-      price: json['price']?.toString(),
-      options: optsRaw
-          .whereType<Map>()
-          .map((e) => LatestOrderItemOption.fromJson(Map<String, dynamic>.from(e)))
-          .toList(),
-    );
-  }
-}
-
-class LatestOrderItemOption {
-  final int id;
-
-  // Old response: {id, name, price}
-  final String? name;
-  final String? price;
-
-  // New response: {service_option_id, computed_price, is_required}
-  final int? serviceOptionId;
-  final bool? isRequired;
-  final String? computedPrice;
-
-  const LatestOrderItemOption({
-    required this.id,
-    this.name,
-    this.price,
-    this.serviceOptionId,
-    this.isRequired,
-    this.computedPrice,
-  });
-
-  /// Prefer computed_price when present, otherwise fallback to legacy price.
-  String? get displayPrice => computedPrice ?? price;
-
-  factory LatestOrderItemOption.fromJson(Map<String, dynamic> json) {
-    return LatestOrderItemOption(
-      id: _asInt(json['id']) ?? 0,
-      name: json['name']?.toString(),
-      price: json['price']?.toString(),
-      serviceOptionId: _asInt(json['service_option_id']),
-      isRequired: json['is_required'] is bool
-          ? json['is_required'] as bool
-          : (json['is_required'] is num ? (json['is_required'] as num) == 1 : null),
-      computedPrice: json['computed_price']?.toString(),
-    );
-  }
-}
-
-// ---- helpers ----
-
+// --- helpers ---
 int? _asInt(dynamic v) {
   if (v == null) return null;
   if (v is int) return v;
-  if (v is num) return v.toInt();
   return int.tryParse(v.toString());
-}
-
-double? _asDouble(dynamic v) {
-  if (v == null) return null;
-  if (v is double) return v;
-  if (v is num) return v.toDouble();
-  return double.tryParse(v.toString());
 }
 
 num? _asNum(dynamic v) {
   if (v == null) return null;
   if (v is num) return v;
   return num.tryParse(v.toString());
+}
+
+double? _asDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is double) return v;
+  if (v is int) return v.toDouble();
+  return double.tryParse(v.toString());
+}
+
+bool _asBool(dynamic v) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  final s = v.toString().toLowerCase().trim();
+  return s == 'true' || s == '1' || s == 'yes';
 }

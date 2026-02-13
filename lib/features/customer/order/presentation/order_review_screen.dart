@@ -73,6 +73,43 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
               }),
 
               const SizedBox(height: 16),
+              const Text(
+                'Pickup & Delivery',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  final scheduledText = _scheduledPickupDateText(draft, context);
+
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          _ReviewKeyValueRow(
+                            label: 'Pickup method',
+                            value: _pickupMethodText(draft, context),
+                          ),
+                          if (scheduledText != null) ...[
+                            const SizedBox(height: 8),
+                            _ReviewKeyValueRow(
+                              label: 'Pickup date',
+                              value: scheduledText,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          _ReviewKeyValueRow(
+                            label: 'Delivery method',
+                            value: _deliveryMethodText(draft),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
               _TotalsSection(draft: draft),
             ],
           ),
@@ -111,6 +148,111 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
     );
   }
 }
+
+String _pickupMethodText(dynamic draft, BuildContext context) {
+  final mode = (draft.pickupMode ?? '').toString();
+
+  switch (mode) {
+    case 'asap':
+      return 'ASAP (Today)';
+    case 'tomorrow':
+      return 'Tomorrow';
+    case 'schedule':
+      return 'Scheduled';
+    default:
+      // Fallback if backend/app uses different labels
+      return mode.isEmpty ? '—' : mode;
+  }
+}
+
+String _deliveryMethodText(dynamic draft) {
+  final mode = (draft.deliveryMode ?? '').toString();
+
+  switch (mode) {
+    case 'pickup_deliver':
+      return 'Pickup & Deliver';
+    case 'walk_in':
+      return 'Walk-in';
+    default:
+      return mode.isEmpty ? '—' : mode;
+  }
+}
+
+/// Returns a formatted pickup date if pickupMode == schedule.
+/// Supports DateTime or ISO-8601 string fields.
+String? _scheduledPickupDateText(dynamic draft, BuildContext context) {
+  final mode = (draft.pickupMode ?? '').toString();
+  if (mode != 'schedule') return null;
+
+  DateTime? dt;
+
+  // Common field names (try what exists in your draft model)
+  try {
+    final v = (draft as dynamic).pickupWindowStart;
+    if (v is DateTime) dt = v;
+    if (v is String) dt = DateTime.tryParse(v);
+  } catch (_) {}
+
+  if (dt == null) {
+    try {
+      final v = (draft as dynamic).scheduledPickupDate;
+      if (v is DateTime) dt = v;
+      if (v is String) dt = DateTime.tryParse(v);
+    } catch (_) {}
+  }
+
+  if (dt == null) {
+    try {
+      final v = (draft as dynamic).pickupDate;
+      if (v is DateTime) dt = v;
+      if (v is String) dt = DateTime.tryParse(v);
+    } catch (_) {}
+  }
+
+  if (dt == null) {
+    // Mode is schedule but date missing
+    return 'Not set';
+  }
+
+  final loc = MaterialLocalizations.of(context);
+  return loc.formatMediumDate(dt.toLocal());
+}
+
+class _ReviewKeyValueRow extends StatelessWidget {
+  const _ReviewKeyValueRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 4,
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.black54),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 6,
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
 class _SelectedAddonsBlock extends StatelessWidget {
   const _SelectedAddonsBlock({

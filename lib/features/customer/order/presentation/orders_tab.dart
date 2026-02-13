@@ -7,15 +7,18 @@ import 'package:go_router/go_router.dart';
 
 import '../models/latest_orders_models.dart';
 import '../state/latest_orders_provider.dart';
+import '../data/customer_orders_api.dart';
+import '../../../../core/network/api_client.dart';
+import 'order_matching_screen.dart';
 
-/// OrdersTab - default UI similar to tracking card screenshot:
-/// - Partner card
-/// - Items card (with total)
+/// OrdersTab - default UI similar to your tracking card screenshot:
+/// - Partner card (vendor shop name, photo, rating, distance)
+/// - Items card (with selected options)
 /// - Tracking steps card
 ///
 /// Data source:
 /// - Active orders ONLY from latestOrdersProvider (auto-refresh)
-/// - History via completedOrdersProvider (bottom sheet, one-time fetch per open)
+/// - History via completedOrdersProvider (bottom sheet, fetched on demand; NOT polled)
 class OrdersTab extends ConsumerStatefulWidget {
   const OrdersTab({super.key});
 
@@ -53,28 +56,25 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   }
 
   num _computeOrderTotal(LatestOrder o) {
+    // New response: "total" is canonical
+    final total = _num(o.total);
+    if (total > 0) return total;
+
     final finalTotal = _num(o.finalTotal);
     if (finalTotal > 0) return finalTotal;
 
     final estimated = _num(o.estimatedTotal);
     if (estimated > 0) return estimated;
 
+    // Fallback: sum items + options
     num sum = 0;
     for (final it in o.items) {
-      sum += _num(it.price);
+      sum += _num(it.displayPrice);
       for (final opt in it.options) {
-        sum += _num(opt.price);
+        sum += _num(opt.displayPrice);
       }
     }
     return sum;
-  }
-
-  int _countOptions(LatestOrder o) {
-    int c = 0;
-    for (final it in o.items) {
-      c += it.options.length;
-    }
-    return c;
   }
 
   /// Maps backend status -> step index in the UI timeline.
@@ -82,7 +82,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   int _statusToStepIndex(String status) {
     final s = status.toLowerCase().trim();
 
-    // ordered steps (0..N-1)
+    // ordered steps (0..4)
     // 0 pickup scheduled
     // 1 picked up
     // 2 washing
@@ -145,7 +145,6 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                             itemBuilder: (_, i) {
                               final o = orders[i];
                               final total = _computeOrderTotal(o);
-                              final optCount = _countOptions(o);
 
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
@@ -153,9 +152,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                                   'Order #${o.id}',
                                   style: const TextStyle(fontWeight: FontWeight.w800),
                                 ),
-                                subtitle: Text(
-                                  '${o.status} • ${o.createdAt} • ${o.items.length} item(s) • $optCount option(s)',
-                                ),
+                                subtitle: Text('${o.status} • ${o.createdAt}'),
                                 trailing: Text(
                                   '₱ $total',
                                   style: const TextStyle(fontWeight: FontWeight.w900),
@@ -257,11 +254,46 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                 final o = active[i];
                 final total = _computeOrderTotal(o);
                 final stepIndex = _statusToStepIndex(o.status);
+
                 return _OrderDashboardCard(
                   order: o,
                   total: total,
                   stepIndex: stepIndex,
                   onOpenDetails: () => context.push('/c/orders/${o.id}'),
+                  onChatVendor: (o.partner == null) 
+                      ? null
+                      : () => context.push('/messages/${o.partner!.id}'),
+                  onCompleteOrder: (o.status.toLowerCase().trim() == 'delivered')
+                      ? () async {
+                          try {
+                            final client = ref.read(apiClientProvider);
+                            final ordersApi = CustomerOrdersApi(client.dio);
+
+                            await ordersApi.confirmDelivery(o.id);
+
+                            if (!context.mounted) return;
+
+                            // Navigate to feedback / review screen
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => OrderCommentsScreen(
+                                  orderId: o.id,
+                                  showOrderCompletedMessage: true,
+                                ),
+                              ),
+                            );
+
+                            // Refresh after navigate (no await)
+                            // ignore: unawaited_futures
+                            ref.read(latestOrdersProvider.notifier).refresh();
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to complete order: $e')),
+                            );
+                          }
+                        }
+                      : null,
                 );
               },
             ),
@@ -278,45 +310,58 @@ class _OrderDashboardCard extends StatelessWidget {
     required this.total,
     required this.stepIndex,
     required this.onOpenDetails,
+    this.onChatVendor,
+    this.onCompleteOrder,
+    super.key,
   });
 
   final LatestOrder order;
   final num total;
   final int stepIndex;
   final VoidCallback onOpenDetails;
+  final VoidCallback? onChatVendor;
+  final VoidCallback? onCompleteOrder;
 
-  String _serviceLabel(LatestOrderItem it) {
-    // We only have service_id in latest API. Show a safe label.
-    // If later your API includes service.name, replace here.
-    return 'Service #${it.serviceId}';
+  String _serviceLabel(LatestOrderItem it) => it.service?.name ?? 'Service #${it.serviceId}';
+
+  String _optionLabel(LatestOrderItemOption o) {
+    // Prefer nested service_option.name, fallback to name, then id.
+    final n = (o.serviceOption?.name ?? o.name ?? '').trim();
+    if (n.isNotEmpty) return n;
+    if (o.serviceOptionId != null) return 'Option #${o.serviceOptionId}';
+    return 'Option #${o.id}';
   }
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18);
+    final shop = order.vendorShop ?? order.shop; // prefer vendor_shop for distance/rating
+    final rating = shop?.avgRating;
+    final dist = shop?.distanceKm;
+    final ratingCount = shop?.ratingsCount;
 
     return Column(
       children: [
-        // Partner card (matches screenshot structure)
+        // Partner card (real data from vendor_shop/accepted_shop)
         _RoundedCard(
           radius: radius,
           child: ListTile(
             dense: true,
-            leading: const Icon(Icons.storefront),
-            title: Text(order.shop?.name ?? 'Laundry partner (placeholder)',
-                style: const TextStyle(fontWeight: FontWeight.w800)),
+            leading: _ShopAvatar(url: shop?.profilePhotoUrl),
+            title: Text(
+              shop?.name ?? 'Laundry partner (placeholder)',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
             subtitle: Text(
-              order.shop == null
-                  ? 'Rating: 4.8 • 1.2km away'
-                  : 'To display more details, implement shop data in the API',
+              _partnerSubtitle(rating: rating, ratingCount: ratingCount, distanceKm: dist),
               style: const TextStyle(color: Colors.black54),
             ),
-            // onTap: onOpenDetails, // Temporarily disabled
+            onTap: onOpenDetails,
           ),
         ),
         const SizedBox(height: 10),
 
-        // Items card
+        // Items card (show item details + options)
         _RoundedCard(
           radius: radius,
           child: Padding(
@@ -328,27 +373,56 @@ class _OrderDashboardCard extends StatelessWidget {
                 const SizedBox(height: 10),
 
                 ...order.items.map((it) {
+                  final uom = (it.uom ?? '').trim();
+                  final qtyLabel = uom.isEmpty ? '${it.qty}' : '${it.qty} ${uom.toUpperCase()}';
+
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(_serviceLabel(it),
-                                  style: const TextStyle(fontWeight: FontWeight.w800)),
-                              if (it.options.isNotEmpty)
-                                Text(
-                                  '${it.options.length} add-on(s)',
-                                  style: const TextStyle(color: Colors.black54),
-                                ),
-                            ],
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _serviceLabel(it),
+                                style: const TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            Text(qtyLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+                          ],
                         ),
-                        Text('${it.qty}',
-                            style: const TextStyle(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₱ ${it.displayPrice ?? '0.00'}',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+
+                        if (it.options.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          // options list (like services screen: name left, price right)
+                          ...it.options.map((o) {
+                            final price = o.displayPrice ?? '0.00';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _optionLabel(o),
+                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                  Text(
+                                    '₱ $price',
+                                    style: const TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
                       ],
                     ),
                   );
@@ -389,9 +463,32 @@ class _OrderDashboardCard extends StatelessWidget {
                 const Divider(height: 18),
                 _TrackingStep(label: 'Delivered', state: _stepState(4, stepIndex)),
 
-                /*
-                Temorarily disabled, no need to display details button
                 const SizedBox(height: 10),
+                if (onChatVendor != null || onCompleteOrder != null) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      if (onChatVendor != null)
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: onChatVendor,
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text('Chat vendor'),
+                          ),
+                        ),
+                      if (onChatVendor != null && onCompleteOrder != null)
+                        const SizedBox(width: 10),
+                      if (onCompleteOrder != null)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: onCompleteOrder,
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: const Text('Complete order'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -399,7 +496,6 @@ class _OrderDashboardCard extends StatelessWidget {
                     child: const Text('Open details'),
                   ),
                 ),
-                */
               ],
             ),
           ),
@@ -408,10 +504,52 @@ class _OrderDashboardCard extends StatelessWidget {
     );
   }
 
-  _TrackingState _stepState(int step, int current) {
+  static String _partnerSubtitle({
+    required double? rating,
+    required int? ratingCount,
+    required double? distanceKm,
+  }) {
+    final parts = <String>[];
+
+    if (rating != null) {
+      final r = rating.toStringAsFixed(1);
+      parts.add('Rating: $r');
+    }
+    if (ratingCount != null) {
+      parts.add('($ratingCount)');
+    }
+    if (distanceKm != null) {
+      parts.add('${distanceKm.toStringAsFixed(2)}km away');
+    }
+
+    if (parts.isEmpty) return 'Tap to view order details';
+    return parts.join(' • ');
+  }
+
+  static _TrackingState _stepState(int step, int current) {
     if (step < current) return _TrackingState.done;
     if (step == current) return _TrackingState.current;
     return _TrackingState.pending;
+  }
+}
+
+class _ShopAvatar extends StatelessWidget {
+  const _ShopAvatar({required this.url});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    final u = (url ?? '').trim();
+    if (u.isEmpty) {
+      return const CircleAvatar(child: Icon(Icons.storefront));
+    }
+
+    return CircleAvatar(
+      backgroundImage: NetworkImage(u),
+      onBackgroundImageError: (_, __) {},
+      child: Container(),
+    );
   }
 }
 
