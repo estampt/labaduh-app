@@ -23,7 +23,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
     super.initState();
 
     // Step animation text
-    Timer.periodic(const Duration(milliseconds: 900), (timer) {
+    Timer.periodic(const Duration(milliseconds: 1800), (timer) {
       if (!mounted) return;
 
       setState(() {
@@ -35,7 +35,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
     });
 
     // Total duration: 2.5 sec
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    Future.delayed(const Duration(milliseconds: 5000), () {
       if (!mounted) return;
 
       Navigator.pop(context); // Return to caller

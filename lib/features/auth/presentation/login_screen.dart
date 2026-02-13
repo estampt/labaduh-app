@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:async'; // <- add this for unawaited
+import '../../../core/push/push_providers.dart'; // <- adjust path
 
 import '../../auth/state/auth_providers.dart';
 import '../../../core/auth/session_notifier.dart';
-
+import '../../../core/push/last_seen/last_seen_providers.dart';
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -36,7 +38,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         password: passCtrl.text,
       );
 
-      // 1) Token missing (or other login failure): show API message and stop.
       if (!outcome.ok) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -48,9 +49,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // 🔑 IMPORTANT: notify router that auth state changed
       ref.read(sessionNotifierProvider).refresh();
 
-      if (!mounted) return;
+      // ✅ NEW: register FCM token to backend (don’t block navigation)
+      unawaited(ref.read(pushTokenServiceProvider).bootstrap());
+      
+      unawaited(Future(() => ref.read(lastSeenServiceProvider).start()));
 
-      // Navigate based on API auth result (customer/vendor/otp/pending)
+      if (!mounted) return;
       context.go(outcome.nextRoute);
     } catch (e) {
       if (!mounted) return;
@@ -58,12 +62,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         SnackBar(content: Text('Login failed: $e')),
       );
     } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
