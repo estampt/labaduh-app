@@ -91,6 +91,10 @@ class OrderDraftState {
   final String pickupMode;   // asap|tomorrow|schedule
   final String deliveryMode; // pickup_deliver|walk_in
 
+  // ✅ When pickupMode == 'schedule'
+  final DateTime? pickupWindowStart;
+  final DateTime? pickupWindowEnd;
+
   final int pickupAddressId;   // placeholder until address module
   final int deliveryAddressId;
 
@@ -102,6 +106,8 @@ class OrderDraftState {
     required this.radiusKm,
     required this.pickupMode,
     required this.deliveryMode,
+    this.pickupWindowStart,
+    this.pickupWindowEnd,
     required this.pickupAddressId,
     required this.deliveryAddressId,
     required this.services,
@@ -113,6 +119,8 @@ class OrderDraftState {
     int? radiusKm,
     String? pickupMode,
     String? deliveryMode,
+    DateTime? pickupWindowStart,
+    DateTime? pickupWindowEnd,
     int? pickupAddressId,
     int? deliveryAddressId,
     List<DraftSelectedService>? services,
@@ -123,6 +131,8 @@ class OrderDraftState {
       radiusKm: radiusKm ?? this.radiusKm,
       pickupMode: pickupMode ?? this.pickupMode,
       deliveryMode: deliveryMode ?? this.deliveryMode,
+      pickupWindowStart: pickupWindowStart ?? this.pickupWindowStart,
+      pickupWindowEnd: pickupWindowEnd ?? this.pickupWindowEnd,
       pickupAddressId: pickupAddressId ?? this.pickupAddressId,
       deliveryAddressId: deliveryAddressId ?? this.deliveryAddressId,
       services: services ?? this.services,
@@ -182,6 +192,8 @@ class OrderDraftController extends Notifier<OrderDraftState> {
       radiusKm: 50,
       pickupMode: 'tomorrow',
       deliveryMode: 'pickup_deliver',
+      pickupWindowStart: null,
+      pickupWindowEnd: null,
       pickupAddressId: 10,
       deliveryAddressId: 10,
       services: [],
@@ -192,8 +204,42 @@ class OrderDraftController extends Notifier<OrderDraftState> {
     state = state.copyWith(lat: lat, lng: lng, radiusKm: radiusKm);
   }
 
-  void setPickupMode(String v) => state = state.copyWith(pickupMode: v);
+  void setPickupMode(String v) {
+    // If leaving schedule, clear any previously picked window
+    if (v != 'schedule') {
+      state = state.copyWith(pickupMode: v, pickupWindowStart: null, pickupWindowEnd: null);
+    } else {
+      state = state.copyWith(pickupMode: v);
+    }
+  }
   void setDeliveryMode(String v) => state = state.copyWith(deliveryMode: v);
+
+
+  // ✅ Schedule window setters (used by OrderScheduleScreen)
+  void setPickupWindow(DateTime start, DateTime end) {
+    state = state.copyWith(pickupWindowStart: start, pickupWindowEnd: end);
+  }
+
+  void setPickupWindowStart(dynamic v) {
+    final dt = _coerceDateTime(v);
+    state = state.copyWith(pickupWindowStart: dt);
+  }
+
+  void setPickupWindowEnd(dynamic v) {
+    final dt = _coerceDateTime(v);
+    state = state.copyWith(pickupWindowEnd: dt);
+  }
+
+  // Some screens may call these naming variants
+  void setPickupDate(dynamic v) => setPickupWindowStart(v);
+  void setScheduledPickupDate(dynamic v) => setPickupWindowStart(v);
+
+  DateTime? _coerceDateTime(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v);
+    return null;
+  }
 
   void setAddresses({required int pickupId, required int deliveryId}) {
     state = state.copyWith(

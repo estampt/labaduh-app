@@ -9,7 +9,7 @@ import '../models/latest_orders_models.dart';
 import '../state/latest_orders_provider.dart';
 import '../data/customer_orders_api.dart';
 import '../../../../core/network/api_client.dart';
-import 'order_matching_screen.dart';
+import 'order_feedback.dart';
 
 /// OrdersTab - default UI similar to your tracking card screenshot:
 /// - Partner card (vendor shop name, photo, rating, distance)
@@ -28,7 +28,7 @@ class OrdersTab extends ConsumerStatefulWidget {
 
 class _OrdersTabState extends ConsumerState<OrdersTab> {
   Timer? _timer;
-  static const _pollInterval = Duration(seconds: 8);
+  static const _pollInterval = Duration(seconds: 60);
 
   @override
   void initState() {
@@ -276,7 +276,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                             // Navigate to feedback / review screen
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => OrderCommentsScreen(
+                                builder: (_) => OrderFeedbackScreen(
                                   orderId: o.id,
                                   showOrderCompletedMessage: true,
                                 ),

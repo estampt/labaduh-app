@@ -17,6 +17,31 @@ class OrderReviewScreen extends ConsumerStatefulWidget {
 class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
   bool _isLoading = false;
 
+
+  String _pickupMethodLabel(String v) {
+    switch (v) {
+      case 'asap':
+        return 'ASAP (Today)';
+      case 'tomorrow':
+        return 'Tomorrow';
+      case 'schedule':
+        return 'Scheduled';
+      default:
+        return v;
+    }
+  }
+
+  String _deliveryMethodLabel(String v) {
+    switch (v) {
+      case 'pickup_deliver':
+        return 'Pickup & Deliver';
+      case 'walk_in':
+        return 'Walk-in';
+      default:
+        return v;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(orderDraftControllerProvider);
@@ -25,6 +50,7 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
       appBar: AppBar(title: const Text('Review Order')),
       body: Stack(
         children: [
+             
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             children: [
@@ -346,6 +372,42 @@ class _TotalsSection extends StatelessWidget {
         children: [
           Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w700 : null)),
           Text('₱ $value', style: TextStyle(fontWeight: bold ? FontWeight.w700 : null)),
+        ],
+      ),
+    );
+  }
+}
+
+
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        );
+
+    final valueStyle = Theme.of(context).textTheme.bodyMedium;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(label, style: labelStyle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(value, style: valueStyle)),
         ],
       ),
     );
