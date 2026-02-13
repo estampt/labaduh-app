@@ -29,7 +29,7 @@ class OrdersTab extends ConsumerStatefulWidget {
 
 class _OrdersTabState extends ConsumerState<OrdersTab> {
   Timer? _timer;
-  static const _pollInterval = Duration(seconds: 8);
+  static const _pollInterval = Duration(seconds: 60);
 
   @override
   void initState() {
@@ -160,7 +160,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                                 ),
                                 onTap: () {
                                   Navigator.of(ctx).pop();
-                                  context.push('/c/orders/${o.id}');
+                                  context.push('/messages/orders', extra: o);
                                 },
                               );
                             },
@@ -263,7 +263,8 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                   onOpenDetails: () => context.push('/c/orders/${o.id}'),
                   onChatVendor: (o.partner == null) 
                       ? null
-                      : () => context.push('/messages/order/${o.id}'),
+                      : () => context.push('/messages/orders', extra: o),
+
                   onCompleteOrder: (o.status.toLowerCase().trim() == 'delivered')
                       ? () async {
                           try {
@@ -649,13 +650,7 @@ class _OrderDashboardCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: onOpenDetails,
-                    child: const Text('Open details'),
-                  ),
-                ),
+                 
               ],
             ),
           ),
