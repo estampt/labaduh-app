@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../models/latest_orders_models.dart';
 import '../state/latest_orders_provider.dart';
@@ -30,17 +31,46 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   Timer? _timer;
   static const _pollInterval = Duration(seconds: 60);
 
-  @override
-  void initState() {
-    super.initState();
+  void _startPolling() {
+    if (_timer != null) return;
     _timer = Timer.periodic(_pollInterval, (_) {
       ref.read(latestOrdersProvider.notifier).refresh();
     });
   }
 
+  void _stopPolling() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Start polling by default. We'll stop automatically when there are no active orders.
+    _startPolling();
+
+    // Stop polling when there are no active orders.
+    // Polling will resume after a manual refresh if active orders appear again.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      ref.listen(latestOrdersProvider, (prev, next) {
+        next.whenData((state) {
+          final hasActive = state.orders.any((o) => _isActiveStatus(o.status));
+          if (hasActive) {
+            _startPolling();
+          } else {
+            _stopPolling();
+          }
+        });
+      });
+    });
+  }
+
   @override
   void dispose() {
-    _timer?.cancel();
+    _stopPolling();
     super.dispose();
   }
 
@@ -218,28 +248,39 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
           final active = state.orders.where((o) => _isActiveStatus(o.status)).toList();
 
           if (active.isEmpty) {
-            return Center(
-              child: Padding(
+            // Keep pull-to-refresh available even when empty.
+            return RefreshIndicator(
+              onRefresh: () => ref.read(latestOrdersProvider.notifier).refresh(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'No active orders',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: _openHistorySheet,
-                      child: const Text('View history'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => context.go('/c/home'),
-                      child: const Text('Go to Home'),
-                    ),
-                  ],
-                ),
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 48),
+                      const Text(
+                        'No active orders',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _openHistorySheet,
+                        child: const Text('View history'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => context.go('/c/home'),
+                        child: const Text('Go to Home'),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Pull down to refresh.',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
           }
@@ -349,26 +390,85 @@ class _OrderDashboardCard extends StatelessWidget {
             dense: true,
             leading: _ShopAvatar(url: shop?.profilePhotoUrl),
             title: Text(
-              shop?.name ?? 'Laundry partner (placeholder)',
+              shop?.name ?? 'Searching for available Labaduh partners...',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             subtitle: Text(
               _partnerSubtitle(rating: rating, ratingCount: ratingCount, distanceKm: dist),
               style: const TextStyle(color: Colors.black54),
             ),
-            onTap: onOpenDetails,
+            //onTap: onOpenDetails, // Optional: open details when tapping partner card as well
           ),
         ),
         const SizedBox(height: 10),
 
-        // Items card (show item details + options)
-        _RoundedCard(
-          radius: radius,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        
+            // Items card (show item details + options)
+          _RoundedCard(
+            radius: radius,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  // ---------- HEADER ----------
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+
+                      // Order Number (left)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+
+                            Text(
+                              'Order #${order.id}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 17,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            Text(
+                              'Order placed',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Date (rightmost)
+                      Text(
+                        _formatDate(order.createdAt),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // ---------- SPACE BEFORE ITEMS ----------
+                  const SizedBox(height: 16),
+
+                  // Divider (optional but nice)
+                  Divider(
+                    height: 1,
+                    color: Colors.grey.withOpacity(0.25),
+                  ),
+
+                  const SizedBox(height: 12),
+
                 const Text('Items', style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 10),
 
@@ -489,13 +589,7 @@ class _OrderDashboardCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: onOpenDetails,
-                    child: const Text('Open details'),
-                  ),
-                ),
+                 
               ],
             ),
           ),
@@ -522,7 +616,7 @@ class _OrderDashboardCard extends StatelessWidget {
       parts.add('${distanceKm.toStringAsFixed(2)}km away');
     }
 
-    if (parts.isEmpty) return 'Tap to view order details';
+    if (parts.isEmpty) return 'Please wait...';
     return parts.join(' • ');
   }
 
@@ -615,3 +709,13 @@ class _TrackingStep extends StatelessWidget {
     );
   }
 }
+
+String _formatDate(String? dateStr) {
+  if (dateStr == null || dateStr.isEmpty) return '-';
+
+  final date = DateTime.tryParse(dateStr);
+  if (date == null) return '-';
+
+  return DateFormat('MMM dd, yyyy • hh:mm a').format(date);
+}
+
