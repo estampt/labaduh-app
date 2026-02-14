@@ -424,34 +424,45 @@ class _OrderDashboardCard extends StatelessWidget {
         // Items card (show item details + options)
         _RoundedCard(
           radius: radius,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: Theme(
+            // ✅ Removes the default ExpansionTile divider line
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: false,
+              tilePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
 
-                // ---------- HEADER ----------
+              // ✅ Collapsed view: ONLY Order Number + Total
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Order #${order.id}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '₱ ${_fmtMoney(total)}',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+
+              // ✅ Expanded content: everything else in the "middle"
+              children: [
+                // ---------- HEADER DETAILS ----------
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
-                    // Order Number (left)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-
-                          Text(
-                            'Order #${order.id}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 17,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
                           Text(
                             'Order placed',
                             style: TextStyle(
@@ -462,8 +473,6 @@ class _OrderDashboardCard extends StatelessWidget {
                         ],
                       ),
                     ),
-
-                    // Date (rightmost)
                     Text(
                       _formatDate(order.createdAt),
                       textAlign: TextAlign.right,
@@ -476,108 +485,90 @@ class _OrderDashboardCard extends StatelessWidget {
                   ],
                 ),
 
-                // ---------- SPACE BEFORE ITEMS ----------
                 const SizedBox(height: 16),
 
-                // Divider (optional but nice)
                 Divider(
                   height: 1,
                   color: Colors.grey.withOpacity(0.25),
                 ),
-
                 const SizedBox(height: 12),
 
-                // 👉 Your items list continues below…
-
-
+                // ---------- ITEMS ----------
                 ...order.items.map((it) {
-                final uom = (it.uom ?? '').trim();
-                final qtyLabel =
-                    uom.isEmpty ? '${it.qty}' : '${it.qty} ${uom.toUpperCase()}';
+                  final uom = (it.uom ?? '').trim();
+                  final qtyLabel =
+                      uom.isEmpty ? '${it.qty}' : '${it.qty} ${uom.toUpperCase()}';
 
-                final price = it.displayPrice ?? '0.00';
+                  final price = it.displayPrice ?? '0.00';
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ---------- MAIN LINE ----------
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _serviceLabel(it),
+                                style: const TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            Text(
+                              '₱ $price',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
 
-                      // ---------- MAIN LINE ----------
-                      Row(
-                        children: [
-                          Expanded(
+                        // ---------- UOM / DESCRIPTION ----------
+                        if (qtyLabel.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              _serviceLabel(it),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
+                              'Qty: $qtyLabel',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
                               ),
                             ),
                           ),
 
-                          // PRICE right-aligned
-                          Text(
-                            '₱ $price',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
+                        // ---------- OPTIONS ----------
+                        if (it.options.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          ...it.options.map((o) {
+                            final optPrice = o.displayPrice ?? '0.00';
 
-                      // ---------- UOM / DESCRIPTION ----------
-                      if (qtyLabel.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Qty: $qtyLabel',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-
-                      // ---------- OPTIONS ----------
-                      if (it.options.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-
-                        ...it.options.map((o) {
-                          final optPrice = o.displayPrice ?? '0.00';
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _optionLabel(o),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _optionLabel(o),
+                                      style: const TextStyle(fontWeight: FontWeight.w700),
                                     ),
                                   ),
-                                ),
-                                Text(
-                                  '₱ $optPrice',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
+                                  Text(
+                                    '₱ $optPrice',
+                                    style: const TextStyle(fontWeight: FontWeight.w800),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
                       ],
-                    ],
-                  ),
-                );
-              }),
-
+                    ),
+                  );
+                }).toList(),
 
                 const Divider(height: 22),
 
-                // ---- Breakdown (Subtotal / Fees / Discount) ----
+                // ---------- BREAKDOWN ----------
                 _AmountRow(label: 'Subtotal', value: subtotal),
                 _AmountRow(label: 'Delivery Fee', value: deliveryFee),
                 _AmountRow(label: 'Service Fee', value: serviceFee),
@@ -590,11 +581,15 @@ class _OrderDashboardCard extends StatelessWidget {
                 Divider(height: 1, color: Colors.grey.withOpacity(0.25)),
                 const SizedBox(height: 10),
 
+                // ---------- TOTAL (expanded section) ----------
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Total', style: TextStyle(fontWeight: FontWeight.w900)),
-                    Text('₱ ${_fmtMoney(total)}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(
+                      '₱ ${_fmtMoney(total)}',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ],
                 ),
               ],

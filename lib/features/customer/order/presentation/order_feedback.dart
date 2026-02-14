@@ -412,134 +412,142 @@ class _OrderFeedbackScreenState extends ConsumerState<OrderFeedbackScreen> {
         ],
 
         // Order details card
+        // Wrap your existing card with an ExpansionTile layout.
         Card(
           margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            initiallyExpanded: false,
+
+            // 🔽 Collapsed view (default): ONLY Order Number + Price
+            title: Row(
               children: [
+                Expanded(
+                  child: Text(
+                    'Order #${data['id']}',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                ),
                 Text(
-                  'Order #${data['id']}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  '₱ $totalLabel',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                 ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 6,
-                  children: [
-                    Chip(label: Text('Status: $status')),
-                    Chip(label: Text('Pricing: $pricingStatus')),
-                    Chip(label: Text('Total: ₱ $totalLabel')),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Text('Items', style: TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 8),
-
-                ...items.map((e) {
-                  final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
-
-                  final service = (m['service'] is Map) ? Map<String, dynamic>.from(m['service']) : null;
-                  final serviceName = service?['name']?.toString();
-                  final serviceId = m['service_id']?.toString() ?? '-';
-
-                  final qty = m['qty']?.toString() ?? '-';
-                  final uom = (m['uom'] ?? '').toString();
-                  final price = (m['computed_price'] ?? m['price'] ?? '-').toString();
-
-                  final options = (m['options'] as List?) ?? const [];
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                (serviceName != null && serviceName.trim().isNotEmpty)
-                                    ? serviceName
-                                    : 'Service #$serviceId',
-                                style: const TextStyle(fontWeight: FontWeight.w900),
-                              ),
-                            ),
-                            Text(
-                              '₱ $price',
-                              style: const TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Qty: $qty ${uom.isEmpty ? '' : uom.toUpperCase()}',
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-
-                        if (options.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Add-ons',
-                            style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black54),
-                          ),
-                          const SizedBox(height: 6),
-                          ...options.map((o) {
-                            final om = o is Map ? Map<String, dynamic>.from(o) : <String, dynamic>{};
-                            final so = (om['service_option'] is Map)
-                                ? Map<String, dynamic>.from(om['service_option'])
-                                : null;
-
-                            final optName = so?['name']?.toString();
-                            final optId = om['service_option_id']?.toString() ?? om['id']?.toString() ?? '-';
-                            final optPrice = (om['computed_price'] ?? om['price'] ?? '-').toString();
-                            final req = om['is_required'];
-
-                            final requiredLabel = (req == true || req == 1 || req == '1') ? ' (required)' : '';
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${(optName != null && optName.trim().isNotEmpty) ? optName : 'Option #$optId'}$requiredLabel',
-                                      style: const TextStyle(fontWeight: FontWeight.w700),
-                                    ),
-                                  ),
-                                  Text(
-                                    '₱ $optPrice',
-                                    style: const TextStyle(fontWeight: FontWeight.w800),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-
- 
-                        ],
-
-                        const Divider(height: 18),
-                        // ✅ Total summary below items
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total', style: TextStyle(fontWeight: FontWeight.w900)),
-                          Text('₱ $totalLabel', style: const TextStyle(fontWeight: FontWeight.w900)),
-                        ],
-                      ),
-
-                      ],
-                    ),
-                  );
-                }).toList(),
               ],
             ),
+
+            // Optional: small hint line under title (remove if you want it even cleaner)
+            subtitle: Text(
+              '${items.length} item${items.length == 1 ? '' : 's'}',
+              style: const TextStyle(color: Colors.black54),
+            ),
+
+            // 🔼 Expanded content: EVERYTHING ELSE goes here (the "middle")
+            children: [
+              const SizedBox(height: 10),
+              const Text('Items', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+
+              ...items.map((e) {
+                final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+
+                final service = (m['service'] is Map) ? Map<String, dynamic>.from(m['service']) : null;
+                final serviceName = service?['name']?.toString();
+                final serviceId = m['service_id']?.toString() ?? '-';
+
+                final qty = m['qty']?.toString() ?? '-';
+                final uom = (m['uom'] ?? '').toString();
+                final price = (m['computed_price'] ?? m['price'] ?? '-').toString();
+
+                final options = (m['options'] as List?) ?? const [];
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              (serviceName != null && serviceName.trim().isNotEmpty)
+                                  ? serviceName
+                                  : 'Service #$serviceId',
+                              style: const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                          Text(
+                            '₱ $price',
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Qty: $qty ${uom.isEmpty ? '' : uom.toUpperCase()}',
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+
+                      if (options.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Add-ons',
+                          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black54),
+                        ),
+                        const SizedBox(height: 6),
+                        ...options.map((o) {
+                          final om = o is Map ? Map<String, dynamic>.from(o) : <String, dynamic>{};
+                          final so = (om['service_option'] is Map)
+                              ? Map<String, dynamic>.from(om['service_option'])
+                              : null;
+
+                          final optName = so?['name']?.toString();
+                          final optId = om['service_option_id']?.toString() ?? om['id']?.toString() ?? '-';
+                          final optPrice = (om['computed_price'] ?? om['price'] ?? '-').toString();
+                          final req = om['is_required'];
+
+                          final requiredLabel = (req == true || req == 1 || req == '1') ? ' (required)' : '';
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${(optName != null && optName.trim().isNotEmpty) ? optName : 'Option #$optId'}$requiredLabel',
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                Text(
+                                  '₱ $optPrice',
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+
+                      const Divider(height: 18),
+                    ],
+                  ),
+                );
+              }).toList(),
+
+              // ✅ Total summary shown ONCE (not per-item)
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total', style: TextStyle(fontWeight: FontWeight.w900)),
+                  Text('₱ $totalLabel', style: const TextStyle(fontWeight: FontWeight.w900)),
+                ],
+              ),
+            ],
           ),
         ),
-      ],
+        ],
     );
   }
 
