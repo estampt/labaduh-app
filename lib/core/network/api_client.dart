@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart'; // <-- add this
 
 import '../../features/auth/data/token_store.dart';
 import '../../features/auth/state/auth_providers.dart';
@@ -83,11 +84,24 @@ class ApiClient {
 /// Provider: adjust baseUrl for emulator/web if needed.
 final apiClientProvider = Provider<ApiClient>((ref) {
   final tokenStore = ref.watch(tokenStoreProvider);
+
+  // Priority:
+  // 1) --dart-define=API_BASE_URL=http://...
+  // 2) platform defaults (android emulator vs web/desktop)
+  const envBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+  final baseUrl = envBaseUrl.isNotEmpty ? envBaseUrl : _defaultBaseUrlForPlatform();
+
   return ApiClient(
-    baseUrl: const String.fromEnvironment(
-      'API_BASE_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    ),
+    baseUrl: baseUrl,
     tokenStore: tokenStore,
   );
 });
+
+String _defaultBaseUrlForPlatform() {
+  if (kIsWeb) return 'http://127.0.0.1:8000';
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    return 'http://10.0.2.2:8000';
+  }
+  return 'http://127.0.0.1:8000';
+}
+

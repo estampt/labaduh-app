@@ -7,6 +7,8 @@ import '../../../core/push/push_providers.dart'; // <- adjust path
 import '../../auth/state/auth_providers.dart';
 import '../../../core/auth/session_notifier.dart';
 import '../../../core/push/last_seen/last_seen_providers.dart';
+ 
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -51,10 +53,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // ✅ NEW: register FCM token to backend (don’t block navigation)
       unawaited(ref.read(pushTokenServiceProvider).bootstrap());
-      
+      unawaited(ref.read(pushNotificationServiceProvider).bootstrap());
       unawaited(Future(() => ref.read(lastSeenServiceProvider).start()));
 
+      
       if (!mounted) return;
+      
       context.go(outcome.nextRoute);
     } catch (e) {
       if (!mounted) return;

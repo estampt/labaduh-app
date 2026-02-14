@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
@@ -9,50 +8,58 @@ class PushTokenService {
 
   final PushTokenApi _api;
 
-  bool _started = false;
+  bool _bootstrapped = false;
 
-  String get _platform {
-    if (kIsWeb) return 'web';
-    if (Platform.isIOS) return 'ios';
-    return 'android';
-  }
-
-  /// Call this after login (token already saved), or on app start if already logged in.
   Future<void> bootstrap() async {
-    if (_started) return;
-    _started = true;
+    if (_bootstrapped) return;
+    _bootstrapped = true;
 
-    await _ensurePermission();
+    try {
+      final fcm = FirebaseMessaging.instance;
 
-    // initial token
-    await syncNow();
+      // 1) Ask permission (iOS + Android 13+)
+      final settings = await fcm.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      debugPrint('Push permission: ${settings.authorizationStatus}');
 
-    // refresh listener
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-      try {
-        await _api.registerToken(token: newToken, platform: _platform);
-      } catch (_) {
-        // keep silent; next bootstrap/sync will retry
+      // 2) Get token and register
+      final token = await fcm.getToken();
+      debugPrint('FCM TOKEN: $token');
+
+      if (token != null && token.isNotEmpty) {
+        await _register(token);
       }
-    });
+
+      // 3) Token refresh listener
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+        debugPrint('FCM TOKEN REFRESH: $newToken');
+        if (newToken.isNotEmpty) {
+          await _register(newToken);
+        }
+      });
+    } catch (e, st) {
+      debugPrint('Push bootstrap error: $e\n$st');
+      // allow retry if something failed before any registration
+      _bootstrapped = false;
+    }
   }
 
-  Future<void> syncNow() async {
-    await _ensurePermission();
-
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token == null || token.isEmpty) return;
-
-    await _api.registerToken(token: token, platform: _platform);
-  }
-
-  Future<void> _ensurePermission() async {
-    // iOS + Android 13+ (and web) handled here
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
+  Future<void> _register(String token) async {
+    try {
+      await _api.registerToken(
+        token: token,
+        platform: defaultTargetPlatform.name, // "android" / "ios"
+        // deviceId: optional if your api supports it
+      );
+      debugPrint('✅ FCM token registered to backend.');
+    } catch (e, st) {
+      debugPrint('❌ Register token failed: $e\n$st');
+      // allow retry on next app open/login
+      _bootstrapped = false;
+      rethrow;
+    }
   }
 }
