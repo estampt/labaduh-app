@@ -7,10 +7,17 @@ import '../../features/vendor/orders/presentation/vendor_order_detail_screen.dar
 import '../../features/vendor/earnings/presentation/vendor_earnings_tab.dart';
 import '../../features/vendor/profile/presentation/vendor_profile_tab.dart';
 
-// ✅ NEW import
 import '../../features/vendor/shops/presentation/vendor_shops_screen.dart';
+import '../../features/vendor/shops/presentation/shop_selection_page.dart';
 
 final List<RouteBase> vendorShellRoutes = [
+  // ✅ IMPORTANT: this must exist, OUTSIDE the shell
+  GoRoute(
+    path: '/v/select-shop',
+    builder: (context, state) => const ShopSelectionPage(),
+  ),
+
+  // ✅ Vendor shell tabs
   StatefulShellRoute.indexedStack(
     builder: (context, state, navigationShell) =>
         VendorShell(navigationShell: navigationShell),
@@ -41,14 +48,11 @@ final List<RouteBase> vendorShellRoutes = [
           GoRoute(path: '/v/earnings', builder: (context, state) => const VendorEarningsTab()),
         ],
       ),
-
-      // ✅ NEW: Shops branch BEFORE Profile
       StatefulShellBranch(
         routes: [
           GoRoute(path: '/v/shops', builder: (context, state) => const VendorShopsScreen()),
         ],
       ),
-
       StatefulShellBranch(
         routes: [
           GoRoute(path: '/v/profile', builder: (context, state) => const VendorProfileTab()),

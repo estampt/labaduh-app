@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class VendorShell extends StatelessWidget {
+import '../../../../core/auth/session_notifier.dart';
+
+class VendorShell extends ConsumerWidget {
   const VendorShell({super.key, required this.navigationShell});
   final StatefulNavigationShell navigationShell;
 
@@ -66,20 +69,46 @@ class VendorShell extends StatelessWidget {
   }
 
   Widget _logo() {
-  return SizedBox(
-    height: 28,          // ideal appbar logo height
-    width: 170,          // cap width so it won't hit 🔔💬
-    child: Image.asset(
-      'assets/branding/labaduh_logo.png', // <-- change if your path is different
-      fit: BoxFit.contain,
-      alignment: Alignment.centerLeft,
-    ),
-  );
-}
+    return SizedBox(
+      height: 28,
+      width: 90,
+      child: Image.asset(
+        'assets/branding/labaduh_logo.png',
+        fit: BoxFit.contain,
+        alignment: Alignment.centerLeft,
+      ),
+    );
+  }
 
+  String _headerSubtitle(dynamic session) {
+    // We keep this defensive so your code compiles even if you rename fields.
+    // Preferred: shop name (selected) -> fallback vendor name/id -> 'Vendor'
+    try {
+      final shopName = session.activeShopName;
+      if (shopName != null && shopName.toString().trim().isNotEmpty) {
+        return shopName.toString();
+      }
+    } catch (_) {}
+
+    try {
+      final vendorName = session.vendorName;
+      if (vendorName != null && vendorName.toString().trim().isNotEmpty) {
+        return vendorName.toString();
+      }
+    } catch (_) {}
+
+    try {
+      final vendorId = session.vendorId;
+      if (vendorId != null) return 'Vendor #$vendorId';
+    } catch (_) {}
+
+    return 'Vendor';
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionNotifierProvider);
+
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 12,
@@ -87,7 +116,31 @@ class VendorShell extends StatelessWidget {
           children: [
             _logo(),
             const SizedBox(width: 10),
-            Expanded(child: Text(_titleForIndex(navigationShell.currentIndex))),
+
+            // Title + subtitle (Shop/Vendor)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _titleForIndex(navigationShell.currentIndex),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _headerSubtitle(session),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [

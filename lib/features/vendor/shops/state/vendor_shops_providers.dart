@@ -42,3 +42,22 @@ class _VendorShopsActions {
   Future<VendorShop> update(int shopId, Map<String, dynamic> payload) =>
       repo.update(vendorId: vendorId, shopId: shopId, payload: payload);
 }
+
+/// Currently selected shop for the vendor (null if none selected).
+final activeVendorShopProvider = Provider<VendorShop?>((ref) {
+  final session = ref.watch(sessionNotifierProvider);
+  final activeId = session.activeShopId;
+  if (activeId == null) return null;
+
+  final shopsAsync = ref.watch(vendorShopsProvider);
+  return shopsAsync.maybeWhen(
+    data: (shops) {
+      for (final s in shops) {
+        final d = s as dynamic;
+        if (d.id == activeId) return s;
+      }
+      return null;
+    },
+    orElse: () => null,
+  );
+});

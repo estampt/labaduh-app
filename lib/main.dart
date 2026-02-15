@@ -1,42 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/router/app_router.dart'; // ← your router file
 
-import 'firebase_options.dart';
-import 'app.dart';
-import 'core/config/env.dart';
-
-/// 🔔 Background push handler (REQUIRED)
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  debugPrint('📩 BG message: ${message.data}');
+void main() {
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+class MyApp extends ConsumerWidget {
+  const MyApp({super.key});
 
-  // Environment init
-  Env.init(EnvMode.dev);
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Use the router you already configured in app_router.dart
+    final GoRouter router = ref.watch(appRouterProvider);
 
-  // Firebase init
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+    return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: 'Labaduh Vendor App',
+      routerConfig: router,
 
-  // Register background handler
-  FirebaseMessaging.onBackgroundMessage(
-    _firebaseMessagingBackgroundHandler,
-  );
-
-  runApp(
-    const ProviderScope(
-      child: LabaduhApp(), // ← ⚠️ If your root widget name differs, replace here
-    ),
-  );
+      // Optional theme (safe defaults)
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF2563EB),
+        scaffoldBackgroundColor: Colors.white,
+      ),
+    );
+  }
 }
