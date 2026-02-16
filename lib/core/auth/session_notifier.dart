@@ -15,6 +15,12 @@ class SessionNotifier extends ChangeNotifier {
   String? vendorApproval; // pending/approved/rejected
   String? vendorId;
 
+  // ✅ NEW: active shop "session" (app-wide, ephemeral)
+  int? activeShopId;
+  String? activeShopName;
+
+  bool get hasActiveShop => activeShopId != null;
+
   Future<void> load() async {
     debugPrint('SessionNotifier.load() START');
 
@@ -42,8 +48,8 @@ class SessionNotifier extends ChangeNotifier {
   /// Router guard (synchronous).
   String? redirect(GoRouterState state) {
     debugPrint('redirect: loc=${state.matchedLocation} '
-      'init=$_initialized type=$userType approval=$vendorApproval');
-      
+        'init=$_initialized type=$userType approval=$vendorApproval');
+
     final loc = state.matchedLocation;
 
     // Public routes
@@ -62,7 +68,7 @@ class SessionNotifier extends ChangeNotifier {
     if (!hasToken) {
       if (isPublic) return null;
       return '/';
-    } 
+    }
 
     // Logged in: don't stay on landing/login/signup/role.
     if (isPublic) {
@@ -70,7 +76,18 @@ class SessionNotifier extends ChangeNotifier {
       if (userType == 'vendor') {
         if (vendorApproval == 'pending') return '/v/pending/${vendorId ?? '0'}';
         if (vendorApproval == 'rejected') return '/v/rejected/${vendorId ?? '0'}';
-        return '/v/home';
+        // ✅ If shop NOT selected → force shop selection page
+          if (activeShopId == null) {
+            if (loc != '/v/select-shop') {
+              return '/v/select-shop';
+            }
+            return null;
+          }
+
+          // ✅ If shop selected → allow vendor routes
+          if (!loc.startsWith('/v')) {
+            return '/v/home';
+          }
       }
       return '/c/home';
     }
@@ -107,7 +124,7 @@ class SessionNotifier extends ChangeNotifier {
     }
 
     // Vendor approval gating
-    if (userType == 'vendor' && loc.startsWith('/v')) { 
+    if (userType == 'vendor' && loc.startsWith('/v')) {
       if (vendorApproval == 'pending' && !loc.startsWith('/v/pending')) {
         return '/v/pending/${vendorId ?? '0'}';
       }
@@ -138,6 +155,23 @@ class SessionNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ✅ NEW: active shop setters
+  void setActiveShop({required int shopId, required String shopName}) {
+    activeShopId = shopId;
+    activeShopName = shopName;
+    notifyListeners();
+  }
+
+  void clearActiveShop() {
+    activeShopId = null;
+    activeShopName = null;
+    notifyListeners();
+  }
+
+  /// Call this on logout to clear any session-only selections.
+  void clearEphemeral() {
+    clearActiveShop();
+  }
 }
 
 final sessionNotifierProvider = ChangeNotifierProvider<SessionNotifier>((ref) {

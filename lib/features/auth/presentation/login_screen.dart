@@ -59,7 +59,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       
       if (!mounted) return;
       
-      context.go(outcome.nextRoute);
+      final next = outcome.nextRoute;
+
+      // ✅ Vendor flow: force shop selection page after login.
+      // (ShopSelectionPage will auto-select if only 1 shop, or allow continue if 0 shops.)
+      if (next.startsWith('/v')) {
+        context.go('/v/select-shop');
+      } else {
+        context.go(next);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

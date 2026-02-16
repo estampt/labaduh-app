@@ -18,8 +18,11 @@ Future<void> performLogout({
   session.userType = null;
   session.vendorApproval = null;
   session.vendorId = null;
-  session.refresh(); // see note below
-
+  session.activeShopId = null;
+  session.activeShopName = null;
+  session.clearEphemeral(); // clear active shop and other ephemeral session data
+  session.refresh();
+  
   // 3) Navigate to login (change if your route is different)
   router.go('/login');
 }
