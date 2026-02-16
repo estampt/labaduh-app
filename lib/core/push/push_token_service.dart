@@ -62,4 +62,45 @@ class PushTokenService {
       rethrow;
     }
   }
+
+  Future<void> updateActiveShop(int? shopId) async {
+    debugPrint('🟡 [PushTokenService] updateActiveShop called → shopId: $shopId');
+
+    if (shopId == null) {
+      debugPrint('🔴 [PushTokenService] shopId is null — aborting');
+      return;
+    }
+
+    try {
+      // Get token (reuse your logic or Firebase directly)
+      final token = await FirebaseMessaging.instance.getToken();
+
+      debugPrint('🟡 [PushTokenService] FCM token → $token');
+
+      if (token == null) {
+        debugPrint('🔴 [PushTokenService] Token is null — aborting');
+        return;
+      }
+
+      await _api.updateActiveShop(
+        token: token,
+        activeShopId: shopId,
+      );
+
+      debugPrint('🟢 [PushTokenService] API updateActiveShop SUCCESS');
+    } catch (e) {
+      debugPrint('🔴 [PushTokenService] updateActiveShop error → $e');
+    }
+  }
+
+
+  Future<String?> getToken() async {
+    try {
+      return await FirebaseMessaging.instance.getToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
+
 }

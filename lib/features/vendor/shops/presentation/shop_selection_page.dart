@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import '../../../../core/push/push_providers.dart';
 import '../../../../core/auth/session_notifier.dart';
 import '../domain/vendor_shop.dart';
 import '../state/vendor_shops_providers.dart';
+import 'dart:async';
 
 class ShopSelectionPage extends ConsumerStatefulWidget {
   const ShopSelectionPage({super.key});
@@ -38,15 +39,34 @@ class _ShopSelectionPageState extends ConsumerState<ShopSelectionPage> {
   }
 
   void _selectAndGoHome(VendorShop shop) {
-    final session = ref.read(sessionNotifierProvider);
-    session.setActiveShop(
-      shopId: _shopId(shop),
-      shopName: _shopName(shop),
-    );
+    final session = ref.read(sessionNotifierProvider) as dynamic;
+    final id = _shopId(shop);
+    final name = _shopName(shop);
 
-    // ✅ Go to vendor home (shell)
-    if (mounted) context.go('/v/home');
+    debugPrint('🟡 [ShopSelect] Selected shop → ID: $id | Name: $name');
+
+    try {
+      session.setActiveShop(shopId: id, shopName: name);
+      debugPrint('🟢 [Session] setActiveShop() success');
+    } catch (_) {
+      try {
+        session.setActiveShopId(id);
+        session.setActiveShopName(name);
+        debugPrint('🟢 [Session] setActiveShopId/Name() fallback success');
+      } catch (e) {
+        debugPrint('🔴 [Session] Failed saving shop: $e');
+      }
+    }
+
+    // STEP #6 trigger
+    debugPrint('🟡 [TokenUpdate] Trigger updateActiveShop()');
+
+    unawaited(
+      ref.read(pushTokenServiceProvider).updateActiveShop(id),
+    );
   }
+
+  
 
   void _logout() async {
     // If you have a real logout method somewhere else, call it.

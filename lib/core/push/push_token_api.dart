@@ -1,6 +1,5 @@
-import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
-
+import 'package:flutter/foundation.dart';
 class PushTokenApi {
   PushTokenApi(this._client);
 
@@ -19,4 +18,23 @@ class PushTokenApi {
       },
     );
   }
+
+  Future<void> updateActiveShop({
+    required String token,
+    required int activeShopId,
+  }) async {
+    debugPrint('🟡 [PushTokenAPI] Sending update → token: $token | shop: $activeShopId');
+
+    final res = await _client.dio.post(
+      '/api/v1/push/token',
+      data: {
+        'token': token,
+        'active_shop_id': activeShopId,
+      },
+    );
+
+    debugPrint('🟢 [PushTokenAPI] Response → ${res.statusCode} ${res.data}');
+  }
+
+
 }
