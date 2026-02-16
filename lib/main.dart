@@ -18,6 +18,34 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('📩 BG message: ${message.data}');
 }
 
+/// ✅ NEW: Ask notification permission (Android 13+/iOS) + print token
+Future<void> _initNotifications() async {
+  final messaging = FirebaseMessaging.instance;
+
+  // Ask permission (Android 13+/iOS). On older Android, this won’t hurt.
+  final settings = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  debugPrint('🔔 Notification permission: ${settings.authorizationStatus}');
+
+  // Helpful debug: print the current FCM token
+  final token = await messaging.getToken();
+  debugPrint('✅ FCM token: $token');
+
+  // If token changes later, log it
+  FirebaseMessaging.instance.onTokenRefresh.listen((t) {
+    debugPrint('🔄 FCM token refreshed: $t');
+  });
+
+  // Optional: log foreground messages (so you know pushes are arriving)
+  FirebaseMessaging.onMessage.listen((message) {
+    debugPrint('📩 FG message received: ${message.notification?.title} | ${message.data}');
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -30,13 +58,14 @@ Future<void> main() async {
   );
 
   // Register background handler
-  FirebaseMessaging.onBackgroundMessage(
-    _firebaseMessagingBackgroundHandler,
-  );
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // ✅ NEW: ask permission + print token
+  await _initNotifications();
 
   runApp(
     const ProviderScope(
-      child: LabaduhApp(), // ← ⚠️ If your root widget name differs, replace here
+      child: LabaduhApp(),
     ),
   );
 }
