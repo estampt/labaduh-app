@@ -67,7 +67,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '768668830005',
     projectId: 'labaduh-22858',
     storageBucket: 'labaduh-22858.firebasestorage.app',
-    iosBundleId: 'com.example.labaduh',
+    iosBundleId: 'com.labaduh.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -76,6 +76,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '768668830005',
     projectId: 'labaduh-22858',
     storageBucket: 'labaduh-22858.firebasestorage.app',
-    iosBundleId: 'com.example.labaduh',
+    iosBundleId: 'com.labaduh.app',
   );
 }

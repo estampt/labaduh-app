@@ -124,20 +124,11 @@ class VendorShell extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _titleForIndex(navigationShell.currentIndex),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
                     _headerSubtitle(session),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w600,
-                        ),
                   ),
+                   
                 ],
               ),
             ),

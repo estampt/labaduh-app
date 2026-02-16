@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.labaduh"
+    namespace = "com.labaduh.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
         }
         create("dev2") {
             dimension = "env"
-            applicationIdSuffix = ".dev2"
+            applicationIdSuffix = ".dev2" 
         }
     }
 
@@ -39,7 +39,8 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.labaduh"
+        applicationId = "com.labaduh.app"
+        missingDimensionStrategy("env", "dev")
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
