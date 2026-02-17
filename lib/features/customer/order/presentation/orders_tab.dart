@@ -83,17 +83,29 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   int _statusToStepIndex(String status) {
     final s = status.toLowerCase().trim();
 
-    // ordered steps (0..4)
-    // 0 pickup scheduled
-    // 1 picked up
-    // 2 washing
-    // 3 ready
-    // 4 delivered
-    if (s == 'published' || s == 'matched' || s == 'accepted' || s == 'scheduled') return 0;
-    if (s == 'picked_up' || s == 'pickedup') return 1;
-    if (s == 'washing') return 2;
-    if (s == 'ready') return 3;
-    if (s == 'delivered' || s == 'completed') return 4;
+    // Ordered steps (0..6)
+    // 0 Accepted
+    // 1 Pickup scheduled
+    // 2 Picked up
+    // 3 Weight review
+    // 4 Washing
+    // 5 Out for delivery
+    // 6 Delivered
+    if (s == 'created' || s == 'published') return -1;
+    
+    if (s == 'accepted') return 0;
+
+    if (s == 'pickup_scheduled') return 1;
+
+    if (s == 'picked_up' || s == 'pickedup') return 2;
+
+    if (s == 'weight_reviewed' || s == 'weight_accepted') return 3;
+
+    if (s == 'washing' || s == 'ready') return 4;
+
+    if (s == 'delivery_scheduled' || s == 'out_for_delivery') return 5;
+
+    if (s == 'delivered' || s == 'completed') return 6;
 
     // default: earliest step
     return 0;
@@ -178,7 +190,54 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
     );
   }
 
-  @override
+  
+
+  Future<void> _cancelOrder(int orderId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: const Text('Are you sure you want to cancel this order?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final client = ref.read(apiClientProvider);
+      final ordersApi = CustomerOrdersApi(client.dio);
+
+      // NOTE: Make sure CustomerOrdersApi has this method (commonly named cancelOrder).
+      await ordersApi.cancelOrder(orderId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order cancelled')),
+      );
+
+      // Refresh list (no await)
+      // ignore: unawaited_futures
+      ref.read(latestOrdersProvider.notifier).refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to cancel order: $e')),
+      );
+    }
+  }
+
+@override
   Widget build(BuildContext context) {
     final latestAsync = ref.watch(latestOrdersProvider);
 
@@ -264,7 +323,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                   onChatVendor: (o.partner == null) 
                       ? null
                       : () => context.push('/messages/orders', extra: o),
-
+                  
                   onCompleteOrder: (o.status.toLowerCase().trim() == 'delivered')
                       ? () async {
                           try {
@@ -296,6 +355,10 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                           }
                         }
                       : null,
+
+                  onCancelOrder: (o.status.toLowerCase().trim() == 'created' || o.status.toLowerCase().trim() == 'published')
+                      ? () => _cancelOrder(o.id)
+                      : null,
                 );
               },
             ),
@@ -314,6 +377,7 @@ class _OrderDashboardCard extends StatelessWidget {
     required this.onOpenDetails,
     this.onChatVendor,
     this.onCompleteOrder,
+    this.onCancelOrder,
     super.key,
   });
 
@@ -323,6 +387,7 @@ class _OrderDashboardCard extends StatelessWidget {
   final VoidCallback onOpenDetails;
   final VoidCallback? onChatVendor;
   final VoidCallback? onCompleteOrder;
+  final VoidCallback? onCancelOrder;
 
   String _serviceLabel(LatestOrderItem it) => it.service?.name ?? 'Service #${it.serviceId}';
 
@@ -609,18 +674,22 @@ class _OrderDashboardCard extends StatelessWidget {
                 const Text('Tracking', style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 10),
 
-                _TrackingStep(label: 'Pickup scheduled', state: _stepState(0, stepIndex)),
+                _TrackingStep(label: 'Accepted', state: _stepState(0, stepIndex)),
                 const Divider(height: 18),
-                _TrackingStep(label: 'Picked up', state: _stepState(1, stepIndex)),
+                _TrackingStep(label: 'Pickup scheduled', state: _stepState(1, stepIndex)),
                 const Divider(height: 18),
-                _TrackingStep(label: 'Washing', state: _stepState(2, stepIndex)),
+                _TrackingStep(label: 'Picked up', state: _stepState(2, stepIndex)),
                 const Divider(height: 18),
-                _TrackingStep(label: 'Ready', state: _stepState(3, stepIndex)),
+                _TrackingStep(label: 'Weight review', state: _stepState(3, stepIndex)),
                 const Divider(height: 18),
-                _TrackingStep(label: 'Delivered', state: _stepState(4, stepIndex)),
+                _TrackingStep(label: 'Washing', state: _stepState(4, stepIndex)),
+                const Divider(height: 18),
+                _TrackingStep(label: 'Out for delivery', state: _stepState(5, stepIndex)),
+                const Divider(height: 18),
+                _TrackingStep(label: 'Delivered', state: _stepState(6, stepIndex)),
 
                 const SizedBox(height: 10),
-                if (onChatVendor != null || onCompleteOrder != null) ...[
+                if (onChatVendor != null || onCancelOrder != null || onCompleteOrder != null) ...[
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -632,7 +701,21 @@ class _OrderDashboardCard extends StatelessWidget {
                             label: const Text('Chat vendor'),
                           ),
                         ),
-                      if (onChatVendor != null && onCompleteOrder != null)
+
+                      if (onCancelOrder != null)
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: onCancelOrder,
+                            icon: const Icon(Icons.cancel_outlined),
+                            label: const Text('Cancel Order'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                            ),
+                          ),
+                        ),
+
+                      if ((onChatVendor != null || onCancelOrder != null) && onCompleteOrder != null)
                         const SizedBox(width: 10),
                       if (onCompleteOrder != null)
                         Expanded(
@@ -681,6 +764,7 @@ class _OrderDashboardCard extends StatelessWidget {
     if (step == current) return _TrackingState.current;
     return _TrackingState.pending;
   }
+  
 }
 
 class _ShopAvatar extends StatelessWidget {

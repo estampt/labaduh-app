@@ -1,18 +1,39 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../features/customer/order/models/latest_orders_models.dart';
-class OrderMessagesScreen extends StatefulWidget {
+
+// ✅ Change this import to wherever your apiClientProvider lives in your project.
+import '../../../core/network/api_client.dart';
+
+class OrderMessagesScreen extends ConsumerStatefulWidget {
   final LatestOrder? order;
 
-  const OrderMessagesScreen({super.key, this.order});
+  /// Optional: if you later add route /messages/orders/:orderId
+  final String? orderId;
+  
+
+  const OrderMessagesScreen({super.key, this.order, this.orderId});
 
   @override
-  State<OrderMessagesScreen> createState() => _OrderMessagesScreenState();
+  ConsumerState<OrderMessagesScreen> createState() => _OrderMessagesScreenState();
 }
 
-
-class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
+class _OrderMessagesScreenState extends ConsumerState<OrderMessagesScreen> {
   final _controller = TextEditingController();
+
+  Timer? _pollTimer;
+
+  bool _loading = true;
+  bool _locked = false;
+  bool _sending = false; // ✅ NEW
+  String? _threadId;
+
+  int? _myUserId;
+  List<_ChatMsg> _messages = [];
 
   // ---- helpers to safely read fields from `order` without tight coupling ----
   T? _get<T>(String key) {
@@ -20,12 +41,11 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
     if (o == null) return null;
     try {
       final dyn = o as dynamic;
-      return dyn[key] as T?; // if it's a map-like model
+      return dyn[key] as T?;
     } catch (_) {
       try {
         final dyn = o as dynamic;
-        return dyn
-            .toJson()[key] as T?; // if your model has toJson()
+        return dyn.toJson()[key] as T?;
       } catch (_) {
         return null;
       }
@@ -37,9 +57,7 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
     if (o == null) return null;
     try {
       final dyn = o as dynamic;
-      // try property access (model)
-      return dyn
-          .toJson()[key]; // safest if your model has toJson()
+      return dyn.toJson()[key];
     } catch (_) {
       try {
         final dyn = o as dynamic;
@@ -50,10 +68,10 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
     }
   }
 
-  num _toNum(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v;
-    return num.tryParse(v.toString()) ?? 0;
+  int? _asInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
   }
 
   String _currencySymbol(String code) {
@@ -95,25 +113,262 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
   String _statusLabel(String s) =>
       s.isEmpty ? 'Unknown' : s.replaceAll('_', ' ').toUpperCase();
 
+  String? get _effectiveOrderId {
+    if (widget.orderId != null && widget.orderId!.trim().isNotEmpty) {
+      return widget.orderId!.trim();
+    }
+    final id = widget.order?.id;
+    return id?.toString();
+  }
+
+  Dio get _dio {
+    final api = ref.read(apiClientProvider);
+    // Your ApiClient in this project exposes `dio`.
+    return (api as dynamic).dio as Dio;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
+  Future<void> _bootstrap() async {
+    final orderIdStr = _effectiveOrderId;
+    if (orderIdStr == null) {
+      setState(() => _loading = false);
+      _toast('Missing order id.');
+      return;
+    }
+
+    final orderId = int.tryParse(orderIdStr);
+    if (orderId == null) {
+      setState(() => _loading = false);
+      _toast('Invalid order id.');
+      return;
+    }
+
+    try {
+      await _ensureThread(orderId);
+      await _tryLoadMe(); // for correct bubble alignment
+      await _loadMessages();
+    } catch (e) {
+      // ✅ Don't let init fail silently
+      if (!mounted) return;
+      _toast('Messenger setup failed. Please try again.');
+      setState(() => _loading = false);
+      return;
+    }
+
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted || _threadId == null) return;
+      await _loadMessages(silent: true);
+    });
+  }
+
+  Future<void> _ensureThread(int orderId) async {
+    setState(() => _loading = true);
+
+    try {
+      final res = await _dio.post(
+        '/api/v1/chat/threads',
+        data: {'scope': 'order', 'order_id': orderId},
+      );
+
+      final data = (res.data as Map).cast<String, dynamic>();
+
+      // ✅ Safer parsing (won’t crash if API shape differs)
+      final threadRaw = data['thread'];
+      if (threadRaw is! Map) {
+        _threadId = null;
+        _locked = false;
+        if (mounted) {
+          setState(() => _loading = false);
+          _toast('Chat thread not returned by server.');
+        }
+        return;
+      }
+
+      final thread = threadRaw.cast<String, dynamic>();
+      _threadId = thread['id']?.toString();
+      _locked = thread['locked_at'] != null;
+
+      if (mounted) setState(() => _loading = false);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+
+      final code = e.response?.statusCode;
+      final serverMsg = e.response?.data?.toString();
+
+      if (code == 409) _toast('Chat is closed for this order.');
+      else if (code == 403) _toast('Not allowed.');
+      else _toast('Network / server error creating chat.');
+
+      // ✅ Helpful debug info
+      debugPrint('ensureThread error: $code $serverMsg');
+      _threadId = null;
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      debugPrint('ensureThread unexpected error: $e');
+      _threadId = null;
+    }
+  }
+
+  Future<void> _tryLoadMe() async {
+    // Optional endpoint. If you don't have /api/v1/me yet, it will just fail silently.
+    try {
+      final res = await _dio.get('/api/v1/me');
+      final id = _asInt((res.data as Map)['id']);
+      if (!mounted) return;
+      if (id != null) setState(() => _myUserId = id);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> _loadMessages({bool silent = false}) async {
+    final threadId = _threadId;
+    if (threadId == null) return;
+
+    if (!silent) setState(() => _loading = true);
+
+    try {
+      final res = await _dio.get('/api/v1/chat/threads/$threadId/messages');
+      final list = (res.data['messages'] as List).cast<Map<String, dynamic>>();
+
+      // Your backend currently returns messages in DESC order (newest first).
+      // Your UI works fine either way. If you want oldest first, reverse it.
+      final msgs = list.map((j) {
+        final senderId = _asInt(j['sender_id']) ?? 0;
+        final body = (j['body'] ?? '').toString();
+        final sentAt = (j['sent_at'] ?? j['created_at'] ?? '').toString();
+
+        final fromMe = _myUserId != null ? senderId == _myUserId : false;
+
+        return _ChatMsg(
+          fromMe: fromMe,
+          text: body,
+          time: _prettyTime(sentAt),
+        );
+      }).toList();
+
+      setState(() {
+        _messages = msgs;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!silent) setState(() => _loading = false);
+    }
+  }
+
+  String _prettyTime(String iso) {
+    if (iso.isEmpty) return '';
+    if (iso.length >= 16 && iso.contains(':')) {
+      return iso.substring(11, 16);
+    }
+    return iso;
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _send() async {
+    if (_sending) return;
+
+    final threadId = _threadId;
+    if (threadId == null) {
+      _toast('Chat is not ready yet. Please wait 1–2 seconds.');
+      return;
+    }
+
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      _toast('Type a message first.');
+      return;
+    }
+
+    if (_locked) {
+      _toast('Chat is closed for this order.');
+      return;
+    }
+
+    setState(() => _sending = true);
+
+    try {
+      await _dio.post(
+        '/api/v1/chat/threads/$threadId/messages',
+        data: {'body': text},
+      );
+
+      _controller.clear();
+      await _loadMessages(silent: true);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final serverMsg = e.response?.data?.toString();
+      debugPrint('send message error: $code $serverMsg');
+
+      if (code == 409) {
+        setState(() => _locked = true);
+        _toast('Chat is closed for this order.');
+      } else {
+        _toast(serverMsg != null ? 'Failed: $serverMsg' : 'Failed to send message.');
+      }
+    } catch (e) {
+      debugPrint('send message unexpected error: $e');
+      _toast('Failed to send message.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  // ✅ Call button triggers an FCM invite (no phone dialer)
+  Future<void> _startCallInvite() async {
+    final orderIdStr = _effectiveOrderId;
+    final orderId = orderIdStr == null ? null : int.tryParse(orderIdStr);
+    if (orderId == null) {
+      _toast('Missing order id.');
+      return;
+    }
+
+    try {
+      final res = await _dio.post('/api/v1/calls/invite', data: {
+        'scope': 'order',
+        'order_id': orderId,
+      });
+
+      final callId = (res.data['call_id'] ?? '').toString();
+      if (callId.isNotEmpty) {
+        _toast('Calling…');
+      } else {
+        _toast('Call invite sent.');
+      }
+    } catch (_) {
+      _toast('Failed to start call.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // These keys match your API payload; if your model is not toJson-based yet,
-    // it will still render with fallbacks.
     final order = widget.order;
 
     // ---------- ORDER CORE ----------
-    final orderId = order?.id;
+    final orderId = _effectiveOrderId ?? (order?.id?.toString() ?? '');
     final status = order?.status ?? '';
 
     // ---------- SHOP ----------
     final shop = order?.partner;
-
     final shopName = shop?.name ?? 'Shop';
     final shopPhoto = shop?.profilePhotoUrl;
     final avgRating = shop?.avgRating ?? 0;
@@ -121,23 +376,14 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
 
     // ---------- MONEY ----------
     final currency = order?.currencyCode ?? 'SGD';
-
     final subtotal = order?.subtotalAmount ?? 0;
     final deliveryFee = order?.deliveryFeeAmount ?? 0;
     final serviceFee = order?.serviceFeeAmount ?? 0;
     final discount = order?.discountAmount ?? 0;
     final total = order?.totalAmount ?? 0;
 
-
-    // vendor_shop block (from your latest endpoint)
+    // vendor_shop block (from your latest endpoint) (kept, optional)
     final vendorShop = _getDyn('vendor_shop');
-  
-     // Dummy chat messages (UI-only for now)
-    final demoMessages = <_ChatMsg>[
-      _ChatMsg(fromMe: false, text: 'Hi! We’re preparing your laundry now.', time: '2:14 PM'),
-      _ChatMsg(fromMe: true, text: 'Thanks! About what time is delivery?', time: '2:16 PM'),
-      _ChatMsg(fromMe: false, text: 'Estimated 5:30 PM today 😊', time: '2:18 PM'),
-    ];
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -146,7 +392,7 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(orderId != null ? 'Order #$orderId' : 'Order Messages'),
+            Text(orderId.isNotEmpty ? 'Order #$orderId' : 'Order Messages'),
             const SizedBox(height: 2),
             Text(
               shopName,
@@ -154,6 +400,13 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Call',
+            icon: const Icon(Icons.call),
+            onPressed: _startCallInvite, // ✅ FCM invite
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -171,9 +424,10 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
                   statusColor: _statusColor(status),
                   statusLabel: _statusLabel(status),
                 ),
-
                 const SizedBox(height: 10),
-                _OrderSummaryCard(
+
+                // ✅ Collapsible order summary + Total on right
+                _OrderSummaryCollapsibleCard(
                   currency: currency,
                   fmtMoney: _fmtMoney,
                   subtotal: subtotal,
@@ -181,120 +435,43 @@ class _OrderMessagesScreenState extends State<OrderMessagesScreen> {
                   serviceFee: serviceFee,
                   discount: discount,
                   total: total,
+                  locked: _locked,
+                  vendorShopDebug: vendorShop,
                 ),
-               
-                _OrderProgressBar(status: status),
 
-                const SizedBox(height: 10),
-                _QuickActionsRow(
-                  onCall: () {
-                    // UI-only for now
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Call action (hook later)')),
-                    );
-                  },
-                  onDirections: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Directions action (hook later)')),
-                    );
-                  },
-                  onTrack: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Track action (hook later)')),
-                    );
-                  },
-                ),
               ],
             ),
           ),
-        
+
           // ---------- CHAT LIST ----------
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              itemCount: demoMessages.length,
-              itemBuilder: (context, index) {
-                final m = demoMessages[index];
-                return _ChatBubble(msg: m);
-              },
-            ),
+            child: _loading && _messages.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: () => _loadMessages(),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final m = _messages[index];
+                        return _ChatBubble(msg: m);
+                      },
+                    ),
+                  ),
           ),
-          // ✅ NEW: nicer composer with attach
+
           _ChatComposer(
-            hint: 'Message $shopName…',
+            hint: _locked ? 'Chat closed' : 'Message $shopName…',
             controller: _controller,
-            onSend: _send,
+            onSend: _locked ? () => _toast('Chat is closed for this order.') : _send,
             onAttach: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Attach (hook later)')),
               );
             },
           ),
-          // ---------- COMPOSER ----------
-          /* Old version without attach button
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 12,
-                    color: Colors.black.withOpacity(0.06),
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: InputDecoration(
-                        hintText: 'Message $shopName…',
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(22),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: _send,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: const StadiumBorder(),
-                    ),
-                    child: const Icon(Icons.send, size: 18),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          */
         ],
       ),
-    );
-  }
-
-  void _send() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    _controller.clear();
-
-    // UI-only now:
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Sent: $text')),
     );
   }
 }
@@ -333,13 +510,20 @@ class _HeaderCard extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: Colors.grey[200],
-            backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
-                ? NetworkImage(photoUrl!)
-                : null,
-            child: (photoUrl == null || photoUrl!.isEmpty)
-                ? const Icon(Icons.storefront, color: Colors.black54)
-                : null,
+            child: ClipOval(
+              child: (photoUrl != null && photoUrl!.isNotEmpty)
+                  ? Image.network(
+                      photoUrl!,
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.storefront, color: Colors.black54),
+                    )
+                  : const Icon(Icons.storefront, color: Colors.black54),
+            ),
           ),
+
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -357,7 +541,9 @@ class _HeaderCard extends StatelessWidget {
                     const Icon(Icons.star, size: 14, color: Colors.amber),
                     const SizedBox(width: 4),
                     Text(
-                      rating == 0 ? 'No ratings yet' : '${rating.toStringAsFixed(1)} ($ratingsCount)',
+                      rating == 0
+                          ? 'No ratings yet'
+                          : '${rating.toStringAsFixed(1)} ($ratingsCount)',
                       style: TextStyle(color: Colors.grey[700], fontSize: 12),
                     ),
                   ],
@@ -387,7 +573,7 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-class _OrderSummaryCard extends StatelessWidget {
+class _OrderSummaryCollapsibleCard extends StatelessWidget {
   final String currency;
   final String Function(String, num) fmtMoney;
   final num subtotal;
@@ -396,7 +582,10 @@ class _OrderSummaryCard extends StatelessWidget {
   final num discount;
   final num total;
 
-  const _OrderSummaryCard({
+  final bool locked;
+  final dynamic vendorShopDebug;
+
+  const _OrderSummaryCollapsibleCard({
     required this.currency,
     required this.fmtMoney,
     required this.subtotal,
@@ -404,6 +593,8 @@ class _OrderSummaryCard extends StatelessWidget {
     required this.serviceFee,
     required this.discount,
     required this.total,
+    required this.locked,
+    required this.vendorShopDebug,
   });
 
   Widget _row(String label, String value, {bool bold = false}) {
@@ -421,74 +612,81 @@ class _OrderSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final totalStr = fmtMoney(currency, total);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Order Summary', style: TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          _row('Subtotal', fmtMoney(currency, subtotal)),
-          _row('Delivery Fee', fmtMoney(currency, deliveryFee)),
-          _row('Service Fee', fmtMoney(currency, serviceFee)),
-          _row('Discount', discount == 0 ? fmtMoney(currency, 0) : '- ${fmtMoney(currency, discount)}'),
-          Divider(color: Colors.grey.withOpacity(0.25)),
-          _row('Total', fmtMoney(currency, total), bold: true),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionsRow extends StatelessWidget {
-  final VoidCallback onCall;
-  final VoidCallback onDirections;
-  final VoidCallback onTrack;
-
-  const _QuickActionsRow({
-    required this.onCall,
-    required this.onDirections,
-    required this.onTrack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget chip(IconData icon, String label, VoidCallback onTap) {
-      return Expanded(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          title: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Order Summary',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                totalStr,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
               children: [
-                Icon(icon, size: 18),
-                const SizedBox(height: 6),
-                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                Expanded(
+                  child: Text(
+                    locked ? 'Chat closed for this order' : 'Tap to view breakdown',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                if (locked)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Closed',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
-      );
-    }
+          children: [
+            const SizedBox(height: 8),
+            _row('Subtotal', fmtMoney(currency, subtotal)),
+            _row('Delivery Fee', fmtMoney(currency, deliveryFee)),
+            _row('Service Fee', fmtMoney(currency, serviceFee)),
+            _row(
+              'Discount',
+              discount == 0 ? fmtMoney(currency, 0) : '- ${fmtMoney(currency, discount)}',
+            ),
+            Divider(color: Colors.grey.withOpacity(0.25)),
+            _row('Total', totalStr, bold: true),
 
-    return Row(
-      children: [
-        chip(Icons.call, 'Call', onCall),
-        const SizedBox(width: 10),
-        chip(Icons.directions, 'Directions', onDirections),
-        const SizedBox(width: 10),
-        chip(Icons.local_shipping, 'Track', onTrack),
-      ],
+            // Optional debug section (remove anytime)
+            if (vendorShopDebug != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'vendor_shop: $vendorShopDebug',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -536,83 +734,6 @@ class _ChatBubble extends StatelessWidget {
           Text(
             msg.time,
             style: TextStyle(color: Colors.grey[600], fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
-class _OrderProgressBar extends StatelessWidget {
-  final String status;
-  const _OrderProgressBar({required this.status});
-
-  int _stepIndex(String s) {
-    final v = s.toLowerCase();
-    if (v == 'published') return 0;
-    if (v == 'matching') return 1;
-    if (v == 'accepted' || v == 'pickup' || v == 'picked_up') return 2;
-    if (v == 'washing') return 3;
-    if (v == 'delivered' || v == 'completed') return 4;
-    return 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final idx = _stepIndex(status);
-    final steps = const ['Placed', 'Matching', 'Pickup', 'Washing', 'Delivered'];
-
-    Widget dot(bool active) => Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: active ? Colors.black : Colors.grey[300],
-          ),
-        );
-
-    Widget line(bool active) => Expanded(
-          child: Container(
-            height: 2,
-            margin: const EdgeInsets.symmetric(horizontal: 6),
-            color: active ? Colors.black : Colors.grey[300],
-          ),
-        );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Progress', style: TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              for (int i = 0; i < steps.length; i++) ...[
-                dot(i <= idx),
-                if (i != steps.length - 1) line(i < idx),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              for (int i = 0; i < steps.length; i++)
-                Expanded(
-                  child: Text(
-                    steps[i],
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: i == idx ? FontWeight.w800 : FontWeight.w500,
-                      color: i <= idx ? Colors.black : Colors.grey[500],
-                    ),
-                  ),
-                ),
-            ],
           ),
         ],
       ),
