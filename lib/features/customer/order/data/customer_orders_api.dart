@@ -78,6 +78,18 @@ class CustomerOrdersApi {
     return Order.fromJson(Map<String, dynamic>.from(data));
   }
 
+  Future<Order> weightAccepted(int orderId) async {
+    final res = await dio.post('/api/v1/customer/orders/$orderId/weight-accepted');
+    final data = (res.data as Map?)?['data'];
+    if (data == null) {
+      throw DioException(
+        requestOptions: res.requestOptions,
+        error: 'Invalid response: missing data',
+      );
+    }
+    return Order.fromJson(Map<String, dynamic>.from(data));
+  }
+
   Future<Order> confirmDelivery(int orderId) async {
     final res = await dio.post('/api/v1/customer/orders/$orderId/confirm-delivery');
     final data = (res.data as Map?)?['data'];

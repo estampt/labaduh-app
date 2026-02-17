@@ -11,6 +11,7 @@ import '../state/latest_orders_provider.dart';
 import '../data/customer_orders_api.dart';
 import '../../../../core/network/api_client.dart';
 import 'order_feedback.dart';
+import 'weight_review_screen.dart';
 
 /// OrdersTab - default UI similar to your tracking card screenshot:
 /// - Partner card (vendor shop name, photo, rating, distance)
@@ -356,32 +357,36 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                         }
                       : null,
 
-                  onWeightReview: (o.status.toLowerCase().trim() == 'weight_reviewed')
-                      ? () async {
-                          try {
-                            if (!context.mounted) return;
+                  onWeightReview:
+                    (o.status.toLowerCase().trim() == 'weight_reviewed')
+                        ? () async {
+                            try {
+                              if (!context.mounted) return;
 
-                            // Navigate to feedback / review screen
-                            Navigator.of(context).push(
+                              /// ✅ Navigate to Weight Review page
+                              final result = await Navigator.of(context).push<bool>(
                               MaterialPageRoute(
-                                builder: (_) => OrderFeedbackScreen(
+                                builder: (_) => WeightReviewScreen(
                                   orderId: o.id,
-                                  showOrderCompletedMessage: true,
                                 ),
                               ),
                             );
 
-                            // Refresh after navigate (no await)
-                            // ignore: unawaited_futures
-                            ref.read(latestOrdersProvider.notifier).refresh();
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to complete order: $e')),
-                            );
+                            if (result == true) {
+                              ref.read(latestOrdersProvider.notifier).refresh();
+                            }
+
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to open weight review: $e'),
+                                ),
+                              );
+                            }
                           }
-                        }
-                      : null,
+                        : null,
+
 
 
                   onCancelOrder: (o.status.toLowerCase().trim() == 'created' || o.status.toLowerCase().trim() == 'published')
