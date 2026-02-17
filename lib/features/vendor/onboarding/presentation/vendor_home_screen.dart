@@ -28,7 +28,7 @@ class _VendorHomeScreenState extends State<VendorHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      appBar: AppBar(title: Text('Vendor Home')),
+      //appBar: AppBar(title: Text('Vendor Home')),
       body: Center(child: CircularProgressIndicator()),
     );
   }
