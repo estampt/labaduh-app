@@ -92,26 +92,125 @@ class _OrderMessagesScreenState extends ConsumerState<OrderMessagesScreen> {
 
   Color _statusColor(String s) {
     switch (s.toLowerCase()) {
+
+      /// ---------------- ORDER CREATED ----------------
+      case 'created':
+        return Colors.grey; // Order draft / just placed
+
       case 'published':
-        return Colors.blue;
-      case 'matching':
-        return Colors.indigo;
+        return Colors.blue; // Broadcast to vendors
+
+
+      /// ---------------- ACCEPTANCE ----------------
       case 'accepted':
-      case 'pickup':
+        return Colors.teal; // Vendor accepted
+
+
+      /// ---------------- PICKUP ----------------
+      case 'pickup_scheduled':
+        return Colors.orangeAccent;
+
       case 'picked_up':
         return Colors.orange;
+
+
+      /// ---------------- WEIGHT REVIEW ----------------
+      case 'weight_reviewed':
+        return Colors.amber;
+
+      case 'weight_accepted':
+        return Colors.amber.shade700;
+
+
+      /// ---------------- WASHING ----------------
       case 'washing':
         return Colors.deepPurple;
+
+
+      /// ---------------- READY ----------------
+      case 'ready':
+        return Colors.indigo;
+
+
+      /// ---------------- DELIVERY ----------------
+      case 'delivery_scheduled':
+        return Colors.lightBlue;
+
+      case 'delivering':
+        return Colors.blueAccent;
+
       case 'delivered':
-      case 'completed':
         return Colors.green;
+
+
+      /// ---------------- COMPLETED ----------------
+      case 'completed':
+        return Colors.green.shade800;
+
+
+      /// ---------------- CANCELED ----------------
+      case 'canceled':
+      case 'cancelled':
+        return Colors.red;
+
+
+      /// ---------------- DEFAULT ----------------
       default:
         return Colors.grey;
     }
   }
 
-  String _statusLabel(String s) =>
-      s.isEmpty ? 'Unknown' : s.replaceAll('_', ' ').toUpperCase();
+
+  String _statusLabel(String s) {
+    switch (s.toLowerCase()) {
+      case 'created':
+        return 'Order Created';
+
+      case 'published':
+        return 'Searching for Vendor';
+
+      case 'accepted':
+        return 'Vendor Accepted';
+
+      case 'pickup_scheduled':
+        return 'Pickup Scheduled';
+
+      case 'picked_up':
+        return 'Laundry Picked Up';
+
+      case 'weight_reviewed':
+        return 'Weight Reviewed';
+
+      case 'weight_accepted':
+        return 'Weight Confirmed';
+
+      case 'washing':
+        return 'Washing in Progress';
+
+      case 'ready':
+        return 'Ready for Delivery';
+
+      case 'delivery_scheduled':
+        return 'Delivery Scheduled';
+
+      case 'delivering':
+        return 'Out for Delivery';
+
+      case 'delivered':
+        return 'Delivered';
+
+      case 'completed':
+        return 'Order Completed';
+
+      case 'canceled':
+      case 'cancelled':
+        return 'Order Canceled';
+
+      default:
+        return s;
+    }
+  }
+
 
   String? get _effectiveOrderId {
     if (widget.orderId != null && widget.orderId!.trim().isNotEmpty) {
@@ -393,11 +492,7 @@ class _OrderMessagesScreenState extends ConsumerState<OrderMessagesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(orderId.isNotEmpty ? 'Order #$orderId' : 'Order Messages'),
-            const SizedBox(height: 2),
-            Text(
-              shopName,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
-            ),
+            
           ],
         ),
         actions: [

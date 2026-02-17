@@ -356,6 +356,34 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                         }
                       : null,
 
+                  onWeightReview: (o.status.toLowerCase().trim() == 'weight_reviewed')
+                      ? () async {
+                          try {
+                            if (!context.mounted) return;
+
+                            // Navigate to feedback / review screen
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => OrderFeedbackScreen(
+                                  orderId: o.id,
+                                  showOrderCompletedMessage: true,
+                                ),
+                              ),
+                            );
+
+                            // Refresh after navigate (no await)
+                            // ignore: unawaited_futures
+                            ref.read(latestOrdersProvider.notifier).refresh();
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to complete order: $e')),
+                            );
+                          }
+                        }
+                      : null,
+
+
                   onCancelOrder: (o.status.toLowerCase().trim() == 'created' || o.status.toLowerCase().trim() == 'published')
                       ? () => _cancelOrder(o.id)
                       : null,
@@ -378,6 +406,7 @@ class _OrderDashboardCard extends StatelessWidget {
     this.onChatVendor,
     this.onCompleteOrder,
     this.onCancelOrder,
+    this.onWeightReview,
     super.key,
   });
 
@@ -388,6 +417,7 @@ class _OrderDashboardCard extends StatelessWidget {
   final VoidCallback? onChatVendor;
   final VoidCallback? onCompleteOrder;
   final VoidCallback? onCancelOrder;
+  final VoidCallback? onWeightReview;
 
   String _serviceLabel(LatestOrderItem it) => it.service?.name ?? 'Service #${it.serviceId}';
 
@@ -689,7 +719,7 @@ class _OrderDashboardCard extends StatelessWidget {
                 _TrackingStep(label: 'Delivered', state: _stepState(6, stepIndex)),
 
                 const SizedBox(height: 10),
-                if (onChatVendor != null || onCancelOrder != null || onCompleteOrder != null) ...[
+                if (onChatVendor != null || onCancelOrder != null || onWeightReview != null || onCompleteOrder != null) ...[
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -715,8 +745,25 @@ class _OrderDashboardCard extends StatelessWidget {
                           ),
                         ),
 
-                      if ((onChatVendor != null || onCancelOrder != null) && onCompleteOrder != null)
+                      
+                      
+
+                      if ((onChatVendor != null || onCancelOrder != null) && (onWeightReview != null|| onCompleteOrder != null))
                         const SizedBox(width: 10),
+                      
+                      if (onWeightReview != null)
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: onWeightReview,
+                            icon: const Icon(Icons.balance_rounded),
+                            label: const Text('Review Weight'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green,
+                              side: const BorderSide(color: Colors.green),
+                            ),
+                          ),
+                        ),
+                        
                       if (onCompleteOrder != null)
                         Expanded(
                           child: ElevatedButton.icon(
