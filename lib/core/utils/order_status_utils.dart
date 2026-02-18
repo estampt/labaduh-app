@@ -48,7 +48,7 @@ class OrderStatusUtils {
       case OrderStatus.pickupScheduled:
         return 'Pickup Scheduled';
       case OrderStatus.pickedUp:
-        return 'Laundry Picked Up';
+        return 'Picked Up';
 
       case OrderStatus.weightReviewed:
         return 'Weight Reviewed';
@@ -68,10 +68,10 @@ class OrderStatusUtils {
         return 'Delivered';
 
       case OrderStatus.completed:
-        return 'Order Completed';
+        return 'Completed';
 
       case OrderStatus.canceled:
-        return 'Order Canceled';
+        return 'Canceled';
 
       case OrderStatus.unknown:
         return 'Unknown Status';
@@ -93,13 +93,13 @@ class OrderStatusUtils {
         return 'Searching for Vendor';
 
       case 'accepted':
-        return 'Vendor Accepted';
+        return 'Accepted';
 
       case 'pickup_scheduled':
         return 'Pickup Scheduled';
 
       case 'picked_up':
-        return 'Laundry Picked Up';
+        return 'Picked Up';
 
       case 'weight_reviewed':
         return 'Weight Reviewed';
@@ -124,11 +124,11 @@ class OrderStatusUtils {
         return 'Delivered';
 
       case 'completed':
-        return 'Order Completed';
+        return 'Completed';
 
       case 'canceled':
       case 'cancelled':
-        return 'Order Canceled';
+        return 'Canceled';
 
       default:
         return status ?? '-';
@@ -395,8 +395,8 @@ class OrderStatusUtils {
   }
 
 
-  static String? nextStatusCode(String? raw) {
-  final s = (raw ?? '').trim().toLowerCase();
+  static String nextStatusCode(String raw) {
+  final s = (raw).trim().toLowerCase();
 
   switch (s) {
     case 'created':
@@ -436,58 +436,7 @@ class OrderStatusUtils {
       return 'completed';
 
     default:
-      return null;
-  }
-}
-
-static String nextStatusHint(String? raw) {
-  final s = (raw ?? '').trim().toLowerCase();
-
-  switch (s) {
-    case 'created':
-      return 'Publish order';
-
-    case 'published':
-      return 'Finding a laundry partner';
-
-    case 'accepted':
-      return 'Schedule pickup';
-
-    case 'pickup_scheduled':
-      return 'Pickup in progress';
-
-    case 'picked_up':
-      return 'Review weight';
-
-    case 'weight_reviewed':
-      return 'Waiting customer confirmation';
-
-    case 'weight_accepted':
-      return 'Start washing';
-
-    case 'washing':
-      return 'Prepare for delivery';
-
-    case 'ready':
-      return 'Schedule delivery';
-
-    case 'delivery_scheduled':
-      return 'Out for delivery';
-
-    case 'out_for_delivery':
-      return 'Deliver order';
-
-    case 'delivered':
-      return 'Complete order';
-
-    case 'completed':
-      return 'Order completed';
-
-    case 'canceled':
-      return 'Order canceled';
-
-    default:
-      return '—';
+      return "";
   }
 }
 

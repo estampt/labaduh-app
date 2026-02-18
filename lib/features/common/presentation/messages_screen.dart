@@ -170,13 +170,13 @@ class _OrderMessagesScreenState extends ConsumerState<OrderMessagesScreen> {
         return 'Searching for Vendor';
 
       case 'accepted':
-        return 'Vendor Accepted';
+        return 'Accepted';
 
       case 'pickup_scheduled':
         return 'Pickup Scheduled';
 
       case 'picked_up':
-        return 'Laundry Picked Up';
+        return 'Picked Up';
 
       case 'weight_reviewed':
         return 'Weight Reviewed';
@@ -200,7 +200,7 @@ class _OrderMessagesScreenState extends ConsumerState<OrderMessagesScreen> {
         return 'Delivered';
 
       case 'completed':
-        return 'Order Completed';
+        return 'Completed';
 
       case 'canceled':
       case 'cancelled':

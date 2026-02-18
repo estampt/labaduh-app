@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/vendor_orders_provider.dart';
 import '../model/vendor_order_model.dart';
 import 'package:labaduh/core/utils/order_status_utils.dart';
+import '../../../../core/auth/session_notifier.dart';
 
 
 const double _kSubmitBarHeight = 76;
@@ -42,16 +45,21 @@ class OrderDetailsScreen extends ConsumerWidget {
               order.subtotal + order.deliveryFee + order.serviceFee - order.discount;
 
           return _SubmitBar(
+            orderStatus: order.status,
             totalLabel: _money(grandTotal),
-            //nextLabel: OrderStatusUtils.statusLabel(OrderStatusUtils.nextStatusCode(order.status)),
-            buttonLabel: OrderStatusUtils.submitButtonLabel(OrderStatusUtils.nextStatusCode(order.status)),
-            onPressed: () {
-              // TODO: wire your real submit action here
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Submit tapped')),
-              );
-            },
+
+            buttonLabel:
+                OrderStatusUtils.submitButtonLabel(
+                  OrderStatusUtils.statusToLabel(order.status),
+                ),
+
+            onPressed: () => _handleSubmitStatus(
+              context: context,
+              ref: ref,
+              order: order,
+            ),
           );
+;
         },
       ),
 
@@ -525,11 +533,13 @@ class _InfoTile extends StatelessWidget {
 class _SubmitBar extends StatelessWidget {
   const _SubmitBar({
     required this.totalLabel,
+    required this.orderStatus,
     required this.buttonLabel,
     required this.onPressed,
   });
 
   final String totalLabel;
+  final String orderStatus;
   final String buttonLabel;     
   final VoidCallback onPressed;
 
@@ -581,7 +591,7 @@ class _SubmitBar extends StatelessWidget {
                   ),
                 ),
                 child:  Text(
-                  buttonLabel,
+                  OrderStatusUtils.submitButtonLabel(OrderStatusUtils.nextStatusCode(orderStatus)),
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
@@ -594,4 +604,80 @@ class _SubmitBar extends StatelessWidget {
 }
 String _money(double value, {String symbol = '₱ '}) {
   return '$symbol${value.toStringAsFixed(2)}';
+}
+Future<void> _handleSubmitStatus({
+  required BuildContext context,
+  required WidgetRef ref,
+  required VendorOrderModel order,
+
+  // 🔮 Future extensibility
+  Map<String, dynamic>? fields,
+  List<File>? images,
+}) async {
+
+  final nextSlug =
+      OrderStatusUtils.nextStatusCode(order.status);
+
+  if (nextSlug == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No next action available')),
+    );
+    return;
+  }
+
+  try {
+    final repo =
+        ref.read(vendorOrderRepositoryProvider);
+
+    // =====================================================
+    // Build request body
+    // =====================================================
+    Map<String, dynamic>? body;
+
+    if (fields != null && fields.isNotEmpty) {
+      body = {...fields};
+    }
+
+    // Future: attach images
+    if (images != null && images.isNotEmpty) {
+      body ??= {};
+      body['images'] = images;
+    }
+
+    // =====================================================
+    // Call API
+    // =====================================================
+    final session = ref.watch(sessionNotifierProvider);
+    final vendorId = session.vendorId;
+    final shopId = session.activeShopId;
+    await repo.postStatusAction(
+      vendorId: vendorId,
+      shopId: shopId,
+      orderId: order.id,
+      actionSlug: nextSlug,
+      body: body,
+    );
+
+    if (!context.mounted) return;
+
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Order moved from '
+          '${OrderStatusUtils.statusLabel(nextSlug)}',
+        ),
+      ),
+    );
+
+    // 🔄 Refresh providers
+    ref.invalidate(vendorOrdersProvider);
+
+  } catch (e) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed: $e')),
+    );
+  }
 }

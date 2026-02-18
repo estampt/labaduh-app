@@ -64,6 +64,9 @@ class _VendorDocumentsScreenState extends ConsumerState<VendorDocumentsScreen> {
 
       final p = widget.payload;
 
+      final vendorId =null;
+      //TODO: Fix the document upload
+      /*
       final vendorId = await repo.registerVendorMultipart(
         name: p['name'] as String,
         email: p['email'] as String,
@@ -83,6 +86,7 @@ class _VendorDocumentsScreenState extends ConsumerState<VendorDocumentsScreen> {
         supportingDocPaths: supportingPaths,
       );
 
+        */
       // refresh routing/session guard
       ref.read(sessionNotifierProvider).refresh();
 

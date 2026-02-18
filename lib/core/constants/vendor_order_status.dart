@@ -45,7 +45,7 @@ class VendorOrderStatusConstants {
     accepted: 'Order Accepted',
 
     pickupScheduled: 'Pickup Scheduled',
-    pickedUp: 'Laundry Picked Up',
+    pickedUp: 'Picked Up',
 
     weightReviewed: 'Weight Reviewed',
     weightAccepted: 'Weight Confirmed',
@@ -57,8 +57,8 @@ class VendorOrderStatusConstants {
     outForDelivery: 'Out for Delivery',
     delivered: 'Delivered',
 
-    completed: 'Order Completed',
-    canceled: 'Order Cancelled',
+    completed: 'Completed',
+    canceled: 'Cancelled',
 
     unknown: 'Status Unavailable',
   };

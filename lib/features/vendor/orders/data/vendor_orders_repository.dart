@@ -58,14 +58,17 @@ class VendorOrderRepository {
 
   /// Generic action endpoint:
   /// POST /api/v1/orders/{orderId}/{actionSlug}
-  Future<VendorOrderModel?> postStatusAction({
+  Future<VendorOrderModel?> postStatusAction({ 
+    required final vendorId,
+    required final shopId,
     required int orderId,
     required String actionSlug,
     Map<String, dynamic>? body,
   }) async {
     try {
+      
       final res = await _api.dio.post(
-        '/api/v1/orders/$orderId/$actionSlug',
+        '/api/v1/vendors/$vendorId/shops/$shopId/orders/$orderId/$actionSlug',
         data: body,
       );
 
@@ -88,9 +91,9 @@ class VendorOrderRepository {
   // ---------------------------------------------------------------------------
   // ✅ API placeholders for your routes (action slugs match Laravel routes)
   // ---------------------------------------------------------------------------
-
-  Future<VendorOrderModel?> pickupScheduled({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'pickup-scheduled');
+  /*
+  Future<VendorOrderModel?> pickupScheduled({required int orderId,}) =>
+      postStatusAction(shopId: shopId,  orderId: orderId, actionSlug: 'pickup-scheduled');
 
   Future<VendorOrderModel?> pickedUp({required int orderId}) =>
       postStatusAction(orderId: orderId, actionSlug: 'picked-up');
@@ -129,6 +132,8 @@ class VendorOrderRepository {
     required Map<String, dynamic> payload, // placeholder
   }) =>
       postStatusAction(orderId: orderId, actionSlug: 'propose-final', body: payload);
+
+      */
 }
 
 // ----------------------------
