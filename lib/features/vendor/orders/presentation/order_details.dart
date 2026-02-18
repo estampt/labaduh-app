@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/vendor_orders_provider.dart';
 import '../model/vendor_order_model.dart';
+import 'package:labaduh/core/utils/order_status_utils.dart';
 
+
+const double _kSubmitBarHeight = 76;
 
 class OrderDetailsScreen extends ConsumerWidget {
   const OrderDetailsScreen({
@@ -26,6 +29,32 @@ class OrderDetailsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Order Details'),
       ),
+      bottomNavigationBar: asyncOrders.when(
+        loading: () => const SizedBox.shrink(),
+        error: (_, __) => const SizedBox.shrink(),
+        data: (orders) {
+          final order = orders.firstWhere(
+            (o) => o.id == orderId,
+            orElse: () => throw Exception('Order not found'),
+          );
+
+          final grandTotal =
+              order.subtotal + order.deliveryFee + order.serviceFee - order.discount;
+
+          return _SubmitBar(
+            totalLabel: _money(grandTotal),
+            //nextLabel: OrderStatusUtils.statusLabel(OrderStatusUtils.nextStatusCode(order.status)),
+            buttonLabel: OrderStatusUtils.submitButtonLabel(OrderStatusUtils.nextStatusCode(order.status)),
+            onPressed: () {
+              // TODO: wire your real submit action here
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Submit tapped')),
+              );
+            },
+          );
+        },
+      ),
+
       body: asyncOrders.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -36,7 +65,7 @@ class OrderDetailsScreen extends ConsumerWidget {
           );
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16 + _kSubmitBarHeight),
             children: [
               _CustomerCard(order: order),
               const SizedBox(height: 12), 
@@ -332,11 +361,11 @@ class _CustomerCard extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 26,
-            backgroundImage: (c.profilePhotoUrl != null &&
-                    c.profilePhotoUrl!.isNotEmpty)
-                ? NetworkImage(c.profilePhotoUrl!)
-                : null,
-            child: (c.profilePhotoUrl == null)
+            backgroundImage:
+                (c.profilePhotoUrl != null && c.profilePhotoUrl!.isNotEmpty)
+                    ? NetworkImage(c.profilePhotoUrl!)
+                    : null,
+            child: (c.profilePhotoUrl == null || c.profilePhotoUrl!.isEmpty)
                 ? const Icon(Icons.person)
                 : null,
           ),
@@ -346,21 +375,36 @@ class _CustomerCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  c.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                  ),
+                // ✅ Name (left) + Status (right)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        c.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                      _StatusPill(label: OrderStatusUtils.statusToLabel(order.status), raw: order.status), 
+                  ],
                 ),
+
                 const SizedBox(height: 4),
 
                 Text(
                   address.isEmpty ? '—' : address,
                   style: TextStyle(
                     color: Colors.grey.shade700,
-                    height: 1.3,
+                    fontSize: 12.5,
+                    height: 1.25,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
 
                 if (c.latitude != null && c.longitude != null) ...[
@@ -382,71 +426,7 @@ class _CustomerCard extends StatelessWidget {
   }
 }
 
- 
-
-///////////////////////////////////////////////////////////////////////////////
-/// ITEMS
-///////////////////////////////////////////////////////////////////////////////
-class _ItemsCard extends StatelessWidget {
-  const _ItemsCard({required this.order});
-
-  final VendorOrderModel order;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Services',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 12),
-
-          ...order.items.map((item) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${item.service?.name ?? 'Service'}  •  x${item.quantity}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                
-                  Text(
-                    item.service?.description ?? '—',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      height: 1.3,
-                    ),
-                  ),
-                  
-                  if (item.options.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    ...item.options.map(
-                      (o) => Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '• ${o.serviceOption?.name ?? 'Option'} (x${o.qty})',
-                            style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
+  
 
 ///////////////////////////////////////////////////////////////////////////////
 /// UI HELPERS
@@ -476,33 +456,35 @@ class _Card extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
-
-  final String status;
+  const _StatusPill({required this.label, required this.raw});
+  final String label;
+  final String raw;
 
   @override
   Widget build(BuildContext context) {
+    // Subtle styling that still reads well
+    final bg = Colors.grey.shade100;
+    final border = Colors.grey.shade300;
+
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(.08),
-        borderRadius: BorderRadius.circular(20),
+        //color: bg,
+        color:  OrderStatusUtils.statusColor(raw),
+
+        borderRadius: BorderRadius.circular(999),
+        //border: Border.all(color: border),
       ),
       child: Text(
-        status.replaceAll('_', ' ').toUpperCase(),
+        label,
         style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Colors.blue,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
   }
 }
-
 class _InfoTile extends StatelessWidget {
   const _InfoTile({
     required this.label,
@@ -534,4 +516,82 @@ class _InfoTile extends StatelessWidget {
       ],
     );
   }
+}
+// =======================================================
+// Submit Bar (fixed bottom)
+// =======================================================
+ 
+
+class _SubmitBar extends StatelessWidget {
+  const _SubmitBar({
+    required this.totalLabel,
+    required this.buttonLabel,
+    required this.onPressed,
+  });
+
+  final String totalLabel;
+  final String buttonLabel;     
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: _kSubmitBarHeight,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          border: Border(
+            top: BorderSide(color: Colors.black.withOpacity(.08)),
+          ),
+        ),
+        child: Row(
+          children: [
+            // LEFT: Total + Next
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  
+                  Text(
+                    'Total: $totalLabel',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                  
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // RIGHT: Button
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: onPressed,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                child:  Text(
+                  buttonLabel,
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+String _money(double value, {String symbol = '₱ '}) {
+  return '$symbol${value.toStringAsFixed(2)}';
 }

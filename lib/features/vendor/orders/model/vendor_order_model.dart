@@ -3,6 +3,8 @@
 // Models for: GET /api/v1/vendors/{vendorId}/shops/{shopId}/orders
 // Based on the JSON you provided.
 
+import 'package:labaduh/core/utils/order_status_utils.dart';
+
 class VendorOrdersPage {
   const VendorOrdersPage({
     required this.orders,
@@ -91,7 +93,7 @@ class VendorOrderModel {
 
   String get idLabel => '#$id';
 
-  String get statusLabel => _statusToLabel(status);
+  String get statusLabel => OrderStatusUtils.statusLabel(status);
 
   String get customerName => customer?.name ?? 'Customer';
 
@@ -399,13 +401,4 @@ DateTime? _toDateTime(dynamic v) {
   return null;
 }
 
-String _statusToLabel(String status) {
-  final s = status.trim();
-  if (s.isEmpty) return 'Unknown';
 
-  return s
-      .split('_')
-      .where((p) => p.trim().isNotEmpty)
-      .map((p) => p[0].toUpperCase() + p.substring(1))
-      .join(' ');
-}

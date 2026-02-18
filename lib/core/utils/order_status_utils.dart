@@ -24,6 +24,18 @@ class OrderStatusUtils {
   // ------------------------------
   // Label
   // ------------------------------
+
+  static String statusToLabel(String status) {
+  final s = status.trim();
+  if (s.isEmpty) return 'Unknown';
+
+  return s
+      .split('_')
+      .where((p) => p.trim().isNotEmpty)
+      .map((p) => p[0].toUpperCase() + p.substring(1))
+      .join(' ');
+}
+
   static String label(OrderStatus status) {
     switch (status) {
       case OrderStatus.created:
@@ -31,7 +43,7 @@ class OrderStatusUtils {
       case OrderStatus.published:
         return 'Searching for Vendor';
       case OrderStatus.accepted:
-        return 'Vendor Accepted';
+        return 'Accepted';
 
       case OrderStatus.pickupScheduled:
         return 'Pickup Scheduled';
@@ -67,7 +79,7 @@ class OrderStatusUtils {
   }
 
 
-// --------------------------------------------------
+  // --------------------------------------------------
   // 🏷️ STATUS LABEL
   // --------------------------------------------------
   static String statusLabel(String? status) {
@@ -117,6 +129,62 @@ class OrderStatusUtils {
       case 'canceled':
       case 'cancelled':
         return 'Order Canceled';
+
+      default:
+        return status ?? '-';
+    }
+  }
+
+  // --------------------------------------------------
+  // 🏷️ STATUS LABEL
+  // --------------------------------------------------
+  static String submitButtonLabel(String? status) {
+    final s = (status ?? '').toLowerCase().trim();
+
+    switch (s) {
+      case 'created':
+        return 'Create Order';
+
+      case 'published':
+        return 'Publish';
+
+      case 'accepted':
+        return 'Accept Order';
+
+      case 'pickup_scheduled':
+        return 'Schedule Pickup';
+
+      case 'picked_up':
+        return 'Pick Up';
+
+      case 'weight_reviewed':
+        return 'Review Weight';
+
+      case 'weight_accepted':
+        return 'Confirm Weight';
+
+      case 'washing':
+        return 'Start Washing';
+
+      case 'ready':
+        return 'Ready';
+
+      case 'delivery_scheduled':
+        return 'Schedule Delivery';
+
+      case 'delivering':
+      case 'out_for_delivery':
+        return 'Deliver';
+
+      case 'delivered':
+        return 'Confirm Delivery';
+
+      case 'completed':
+        return 'Complete Order';
+
+      case 'canceled':
+      case 'cancelled':
+        return 'Cancel Order';
 
       default:
         return status ?? '-';
@@ -325,6 +393,105 @@ class OrderStatusUtils {
         return Colors.grey;
     }
   }
+
+
+  static String? nextStatusCode(String? raw) {
+  final s = (raw ?? '').trim().toLowerCase();
+
+  switch (s) {
+    case 'created':
+      return 'published';
+
+    case 'published':
+      return 'accepted';
+
+    case 'accepted':
+      return 'pickup_scheduled';
+
+    case 'pickup_scheduled':
+      return 'picked_up';
+
+    case 'picked_up':
+      return 'weight_reviewed';
+
+    case 'weight_reviewed':
+      return 'weight_accepted';
+
+    case 'weight_accepted':
+      return 'washing';
+
+    case 'washing':
+      return 'ready';
+
+    case 'ready':
+      return 'delivery_scheduled';
+
+    case 'delivery_scheduled':
+      return 'out_for_delivery';
+
+    case 'out_for_delivery':
+      return 'delivered';
+
+    case 'delivered':
+      return 'completed';
+
+    default:
+      return null;
+  }
+}
+
+static String nextStatusHint(String? raw) {
+  final s = (raw ?? '').trim().toLowerCase();
+
+  switch (s) {
+    case 'created':
+      return 'Publish order';
+
+    case 'published':
+      return 'Finding a laundry partner';
+
+    case 'accepted':
+      return 'Schedule pickup';
+
+    case 'pickup_scheduled':
+      return 'Pickup in progress';
+
+    case 'picked_up':
+      return 'Review weight';
+
+    case 'weight_reviewed':
+      return 'Waiting customer confirmation';
+
+    case 'weight_accepted':
+      return 'Start washing';
+
+    case 'washing':
+      return 'Prepare for delivery';
+
+    case 'ready':
+      return 'Schedule delivery';
+
+    case 'delivery_scheduled':
+      return 'Out for delivery';
+
+    case 'out_for_delivery':
+      return 'Deliver order';
+
+    case 'delivered':
+      return 'Complete order';
+
+    case 'completed':
+      return 'Order completed';
+
+    case 'canceled':
+      return 'Order canceled';
+
+    default:
+      return '—';
+  }
+}
+
+
   // ------------------------------
   // Useful guards
   // ------------------------------
@@ -337,3 +504,7 @@ class OrderStatusUtils {
   static bool isActive(OrderStatus status) =>
       !isTerminal(status) && status != OrderStatus.unknown;
 }
+// =======================================================
+// Next Status Helper
+// =======================================================
+
