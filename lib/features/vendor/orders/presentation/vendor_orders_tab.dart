@@ -121,6 +121,7 @@ class _VendorOrdersTabState extends ConsumerState<VendorOrdersTab> {
                         return _OrderCardModern(
                           id: o.id,
                           customerName: o.customerName,
+                          customerAddress: (o.customer?.addressLabel),
                           statusLabel: o.statusLabel,
                           statusRaw: o.status,
                           itemsCount: o.itemsCount,
@@ -313,21 +314,13 @@ String _formatDateTime(DateTime dt) {
   final mm = dt.minute.toString().padLeft(2, '0');
   return '$y-$m-$d $hh:$mm';
 }
-
-String _statusToLabel(String status) {
-  final s = status.trim();
-  if (s.isEmpty) return 'Unknown';
-  return s
-      .split('_')
-      .where((p) => p.trim().isNotEmpty)
-      .map((p) => p[0].toUpperCase() + p.substring(1))
-      .join(' ');
-}
+ 
 
 class _OrderCardModern extends StatelessWidget {
   const _OrderCardModern({
     required this.id,
     required this.customerName,
+    this.customerAddress,
     required this.statusLabel,
     required this.statusRaw,
     required this.itemsCount,
@@ -339,6 +332,7 @@ class _OrderCardModern extends StatelessWidget {
 
   final int id;
   final String customerName;
+  final String? customerAddress;
   final String statusLabel;
   final String statusRaw;
   final int itemsCount;
@@ -350,6 +344,7 @@ class _OrderCardModern extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final border = Colors.grey.shade200;
+    final address = (customerAddress ?? '').trim();
 
     return Material(
       color: Colors.white,
@@ -378,13 +373,31 @@ class _OrderCardModern extends StatelessWidget {
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: Text(
-                            '#$id • $customerName',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '#$id • $customerName',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (address.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  address,
+                                  style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontSize: 12.5,
+                                    height: 1.2,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ),
