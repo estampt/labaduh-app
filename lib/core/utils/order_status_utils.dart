@@ -66,6 +66,62 @@ class OrderStatusUtils {
     }
   }
 
+
+// --------------------------------------------------
+  // 🏷️ STATUS LABEL
+  // --------------------------------------------------
+  static String statusLabel(String? status) {
+    final s = (status ?? '').toLowerCase().trim();
+
+    switch (s) {
+      case 'created':
+        return 'Order Created';
+
+      case 'published':
+        return 'Searching for Vendor';
+
+      case 'accepted':
+        return 'Vendor Accepted';
+
+      case 'pickup_scheduled':
+        return 'Pickup Scheduled';
+
+      case 'picked_up':
+        return 'Laundry Picked Up';
+
+      case 'weight_reviewed':
+        return 'Weight Reviewed';
+
+      case 'weight_accepted':
+        return 'Weight Confirmed';
+
+      case 'washing':
+        return 'Washing in Progress';
+
+      case 'ready':
+        return 'Ready for Delivery';
+
+      case 'delivery_scheduled':
+        return 'Delivery Scheduled';
+
+      case 'delivering':
+      case 'out_for_delivery':
+        return 'Out for Delivery';
+
+      case 'delivered':
+        return 'Delivered';
+
+      case 'completed':
+        return 'Order Completed';
+
+      case 'canceled':
+      case 'cancelled':
+        return 'Order Canceled';
+
+      default:
+        return status ?? '-';
+    }
+  }
   // ------------------------------
   // Color
   // ------------------------------

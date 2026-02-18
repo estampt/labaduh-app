@@ -140,7 +140,6 @@ class _VendorOrdersTabState extends ConsumerState<VendorOrdersTab> {
         ),
       ),
     );
-    
   }
 
   List<VendorOrderModel> _applyFilters({

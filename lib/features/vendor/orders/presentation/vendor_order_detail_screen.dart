@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; 
+import 'package:labaduh/core/utils/order_status_utils.dart';
 
 import '../state/vendor_orders_controller.dart';
 import '../data/vendor_order.dart';
@@ -8,22 +9,7 @@ class VendorOrderDetailScreen extends ConsumerWidget {
   const VendorOrderDetailScreen({super.key, required this.orderId});
   final String orderId;
 
-  String nextVendorActionLabel(VendorOrderStatus status) {
-    switch (status) {
-      case VendorOrderStatus.newRequest:
-        return 'Accept order';
-      case VendorOrderStatus.accepted:
-        return 'Start washing';
-      case VendorOrderStatus.inWash:
-        return 'Mark ready';
-      case VendorOrderStatus.readyForDelivery:
-        return 'Complete';
-      case VendorOrderStatus.completed:
-        return 'Completed';
-      case VendorOrderStatus.cancelled:
-        return 'Cancelled';
-    }
-  }
+   
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,7 +20,8 @@ class VendorOrderDetailScreen extends ConsumerWidget {
       return Scaffold(appBar: AppBar(title: Text('Order $orderId')), body: const Center(child: Text('Not found')));
     }
 
-    final actionLabel = nextVendorActionLabel(order.status);
+    
+    final actionLabel = OrderStatusUtils.statusLabel(order.status.toString());
     final isActionEnabled = order.status != VendorOrderStatus.completed && order.status != VendorOrderStatus.cancelled;
 
     return Scaffold(
