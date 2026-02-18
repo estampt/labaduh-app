@@ -44,21 +44,21 @@ class OrderDetailsScreen extends ConsumerWidget {
           final grandTotal =
               order.subtotal + order.deliveryFee + order.serviceFee - order.discount;
 
-          return _SubmitBar(
-            orderStatus: order.status,
-            totalLabel: _money(grandTotal),
+          if (order.status != "completed" && order.status != "canceled" && order.status != "delivered") {
+            return _SubmitBar(
+              orderStatus: order.status,
+              totalLabel: _money(grandTotal),
+              buttonLabel: OrderStatusUtils.submitButtonLabel(
+                OrderStatusUtils.statusToLabel(order.status),
+              ),
+              onPressed: () => _handleSubmitStatus(
+                context: context,
+                ref: ref,
+                order: order,
+              ),
+            );
+          }
 
-            buttonLabel:
-                OrderStatusUtils.submitButtonLabel(
-                  OrderStatusUtils.statusToLabel(order.status),
-                ),
-
-            onPressed: () => _handleSubmitStatus(
-              context: context,
-              ref: ref,
-              order: order,
-            ),
-          );
 ;
         },
       ),
@@ -556,49 +556,30 @@ class _SubmitBar extends StatelessWidget {
             top: BorderSide(color: Colors.black.withOpacity(.08)),
           ),
         ),
-        child: Row(
-          children: [
-            // LEFT: Total + Next
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  
-                  Text(
-                    'Total: $totalLabel',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  
-                ],
+        child: SizedBox(
+          width: double.infinity,   // ✅ FULL WIDTH
+          height: 48,               // slightly taller for UX
+          child: ElevatedButton(
+            onPressed: onPressed,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
               ),
             ),
-
-            const SizedBox(width: 12),
-
-            // RIGHT: Button
-            SizedBox(
-              height: 44,
-              child: ElevatedButton(
-                onPressed: onPressed,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                ),
-                child:  Text(
-                  OrderStatusUtils.submitButtonLabel(OrderStatusUtils.nextStatusCode(orderStatus)),
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
+            child: Text(
+              OrderStatusUtils.submitButtonLabel(
+                OrderStatusUtils.nextStatusCode(orderStatus),
+              ),
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
               ),
             ),
-          ],
+          ),
         ),
-      ),
+
+              ),
     );
   }
 }
@@ -660,7 +641,8 @@ Future<void> _handleSubmitStatus({
 
     if (!context.mounted) return;
 
-    
+    /*
+    //TODO: TO display message or not, since the status is already disabled by default
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -669,7 +651,7 @@ Future<void> _handleSubmitStatus({
         ),
       ),
     );
-
+    */
     // 🔄 Refresh providers
     ref.invalidate(vendorOrdersProvider);
 
