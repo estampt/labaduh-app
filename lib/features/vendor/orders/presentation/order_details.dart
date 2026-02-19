@@ -8,6 +8,7 @@ import 'package:labaduh/core/utils/submit_loading_provider.dart';
 
 import '../state/vendor_orders_provider.dart';
 import '../model/vendor_order_model.dart';
+import '../data/vendor_orders_repository.dart';
 import 'package:labaduh/core/utils/order_status_utils.dart';
 import '../../../../core/auth/session_notifier.dart';
 
@@ -206,7 +207,8 @@ class OrderDetailsScreen extends ConsumerWidget {
       ref.read(editedQtyProvider(orderId).notifier).state = {};
       ref.read(orderDetailsRefreshNonceProvider(orderId).notifier).state++;
     }
-    
+
+    final wrKey = GlobalKey<_WeightReviewSectionState>();
     return Scaffold(
       appBar: AppBar(
       title: const Text('Order Details'),
@@ -263,15 +265,44 @@ class OrderDetailsScreen extends ConsumerWidget {
               loadingKey: 'vendor_order_submit_${order.id}',
               onPressed: () {
                 final edited = ref.read(editedQtyProvider(order.id));
-                final qtyFields = (edited.isEmpty)
+                final nextSlug = OrderStatusUtils.nextStatusCode(order.status);
+
+                // robust weight-review detection
+                final isWeightReview = {
+                  'weight_review',
+                  'weight-reviewed',
+                  'weightReviewed',
+                  'weight_reviewed',
+                }.contains((nextSlug ?? '').trim());
+
+                if (isWeightReview) {
+                  final st = wrKey.currentState;
+                  if (st == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Weight review form not ready')),
+                    );
+                    return Future.value();
+                  }
+
+                  final fields = st.buildWeightReviewFields(edited);
+                   
+                  return _handleSubmitStatus(
+                    context: context,
+                    ref: ref,
+                    order: order,
+                    fields: fields..removeWhere((k, v) => v == null),
+                    images: st.imagesDraft,
+                  );
+                }
+
+                // normal statuses (qty_actual only)
+                final qtyFields = edited.isEmpty
                     ? null
                     : {
-                        'items': edited.entries
-                            .map((e) => {
-                                  'id': e.key,
-                                  'qty_actual': e.value,
-                                })
-                            .toList(),
+                        'items': edited.entries.map((e) => {
+                              'id': e.key,
+                              'qty_actual': e.value,
+                            }).toList(),
                       };
 
                 return _handleSubmitStatus(
@@ -281,6 +312,7 @@ class OrderDetailsScreen extends ConsumerWidget {
                   fields: qtyFields,
                 );
               },
+
             );
           }
 
@@ -346,7 +378,11 @@ class OrderDetailsScreen extends ConsumerWidget {
                 // ✅ Weight Review (only when picked up)
                 if (_isPickedUp(order.status)) ...[
                   // key forces controllers to reset when we clear local edits
-                  _WeightReviewSection(key: ValueKey('wr_${order.id}_$nonce'), order: order),
+                  _WeightReviewSection(
+                    key: wrKey,
+                    order: order,
+                  ),
+
                   const SizedBox(height: 12),
                 ],
               ],
@@ -880,59 +916,50 @@ class _SubmitBar extends ConsumerWidget {
     final isSubmitting = ref.watch(submitLoadingProvider(loadingKey));
     final isDisabled = disabled || isSubmitting;
 
-    const lift = 10.0; // 👈 how high you want it raised
-
     return SafeArea(
       top: false,
       child: SizedBox(
-        // ✅ make the whole bar taller, so it has "air" below the button
-        height: 48 + lift,
-        child: Align(
-          alignment: Alignment.topCenter, // ✅ button sits higher
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: isDisabled
-                    ? null
-                    : () async {
-                        await ref
-                            .read(submitLoadingProvider(loadingKey).notifier)
-                            .run(() async {
-                          await onPressed();
-                          return true;
-                        });
-                      },
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          OrderStatusUtils.submitButtonLabel(
-                            OrderStatusUtils.nextStatusCode(orderStatus),
-                          ),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                ),
-              ),
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton(
+          onPressed: isDisabled
+              ? null
+              : () async {
+                  await ref
+                      .read(submitLoadingProvider(loadingKey).notifier)
+                      .run(() async {
+                    await onPressed();
+                    return true;
+                  });
+                },
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
             ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 22), // ✅ little lift from menu
+            child: isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    OrderStatusUtils.submitButtonLabel(
+                      OrderStatusUtils.nextStatusCode(orderStatus),
+                    ),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
           ),
         ),
       ),
     );
   }
-
- 
- }
+}
 
 String _money(double value, {String symbol = '₱ '}) {
   return '$symbol${value.toStringAsFixed(2)}';
@@ -1063,6 +1090,26 @@ class _WeightReviewSectionState extends ConsumerState<_WeightReviewSection> {
     super.dispose();
   }
 
+  Map<String, dynamic> buildWeightReviewFields(Map<int, double> editedQty) {
+  final weight = double.tryParse(_weightCtrl.text.trim());
+  final notes = _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
+
+  return {
+    'weight_kg': weight,
+    if (notes != null) 'notes': notes,
+    if (editedQty.isNotEmpty)
+      'items': editedQty.entries.map((e) => {
+        'order_item_id': e.key,
+        'item_qty': e.value,
+        'uploaded': 0,
+        if (notes != null) 'notes': notes,
+      }).toList(),
+  };
+}
+
+List<File> get imagesDraft => List<File>.from(_images);
+
+
   Future<void> _pickFromGallery() async {
     if (_submitting) return;
 
@@ -1181,72 +1228,7 @@ class _WeightReviewSectionState extends ConsumerState<_WeightReviewSection> {
     );
   }
 
-  Future<void> _submit() async {
-    if (_submitting) return;
-
-    final weightText = _weightCtrl.text.trim();
-    final weight = double.tryParse(weightText);
-
-    if (weight == null || weight <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid weight (kg).')),
-      );
-      return;
-    }
-
-    setState(() {
-      _submitting = true;
-      _uploadProgress = null;
-    });
-
-    try {
-      final edited = ref.read(editedQtyProvider(widget.order.id));
-
-      await _handleSubmitStatus(
-        context: context,
-        ref: ref,
-        order: widget.order,
-        fields: {
-          // adjust these keys to match your backend
-          'weight_kg': weight,
-          'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-          'items': edited.isEmpty
-              ? null
-              : edited.entries
-                  .map((e) => {
-                        // ✅ required by weight review API
-                        'order_item_id': e.key,
-                        'item_qty': e.value,
-                        'uploaded': 0, // backend should flip to 1/true after storing image(s)
-                        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-                      }..removeWhere((k, v) => v == null))
-                  .toList(),
-        }..removeWhere((k, v) => v == null),
-        images: _images,
-      );
-
-      if (!mounted) return;
-
-      // Reset form after success
-      setState(() {
-        _weightCtrl.clear();
-        _notesCtrl.clear();
-        _images.clear();
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Weight review submitted')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-          _uploadProgress = null;
-        });
-      }
-    }
-  }
-
+   
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -1270,8 +1252,9 @@ class _WeightReviewSectionState extends ConsumerState<_WeightReviewSection> {
             const Text(
               'Add the actual weight and photos (optional). This will move the order to the next step.',
               style: TextStyle(color: Colors.black54),
-            ), 
-
+            ),
+            const SizedBox(height: 12),
+ 
             const SizedBox(height: 10),
             TextField(
               controller: _notesCtrl,
@@ -1352,16 +1335,10 @@ Future<void> _handleSubmitStatus({
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      title: const Text(
-        'Confirm Action',
-        style: TextStyle(fontWeight: FontWeight.w800),
-      ),
-      content: Text(
-        'Move order to\n${OrderStatusUtils.statusLabel(nextSlug)}?',
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Confirm Action',
+          style: TextStyle(fontWeight: FontWeight.w800)),
+      content: Text('Move order to\n${OrderStatusUtils.statusLabel(nextSlug)}?'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
@@ -1401,53 +1378,62 @@ Future<void> _handleSubmitStatus({
     // Session
     // =====================================================
     final session = ref.read(sessionNotifierProvider);
-    final vendorId = session.vendorId;
+    final vendorIdStr = session.vendorId;
     final shopId = session.activeShopId;
 
-    // =====================================================
-    // API Call
-    // =====================================================
-    
-    if(nextSlug== 'weight_review')
-    {
-          await repo.postWeightReview(
-          vendorId: vendorId,
-          shopId: shopId,
-          orderId: order.id,
-          body: body, // includes order_item_id, item_qty, uploaded, notes, image/images
-        );
+    if (vendorIdStr == null || vendorIdStr.trim().isEmpty) {
+      throw Exception('Missing vendorId in session');
     }
-    else
-    {
+    if (shopId == null) {
+      throw Exception('Missing activeShopId in session');
+    }
+
+    final vendorId = int.tryParse(vendorIdStr);
+    if (vendorId == null) {
+      throw Exception('Invalid vendorId: $vendorIdStr');
+    }
+
+    // =====================================================
+    // API Call (merged)
+    // =====================================================
+    final isWeightReview = {
+      'weight_review',
+      'weight-reviewed',
+      'weightReviewed',
+      'weight_reviewed',
+    }.contains(nextSlug);
+
+    if (isWeightReview) {
+      await repo.postWeightReview(
+        vendorId: vendorIdStr,
+        shopId: shopId,
+        orderId: order.id,
+        body: body,
+      );
+    } else {
       await repo.postStatusAction(
-        vendorId: vendorId,
+        vendorId: vendorIdStr,
         shopId: shopId,
         orderId: order.id,
         actionSlug: nextSlug,
         body: body,
-        );
+      );
     }
-    
 
     if (!context.mounted) return;
 
     // =====================================================
     // Refresh & WAIT for completion
     // =====================================================
-    final params = (
-      vendorId: int.parse(vendorId!), // <-- convert
-      shopId: shopId,
-    );
+    final params = (vendorId: vendorId, shopId: shopId);
 
-    ref.invalidate(vendorOrdersProvider(params as VendorShopParams));
+    ref.invalidate(vendorOrdersProvider(params));
     await ref.read(vendorOrdersProvider(params).future);
-
   } catch (e) {
     if (!context.mounted) return;
 
     String message = 'Something went wrong';
 
-    // ✅ If Dio error → extract API response
     if (e is DioException) {
       final data = e.response?.data;
 
@@ -1463,9 +1449,7 @@ Future<void> _handleSubmitStatus({
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$message')),
+      SnackBar(content: Text(message)),
     );
   }
 }
-
-

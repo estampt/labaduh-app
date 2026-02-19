@@ -63,6 +63,35 @@ class VendorOrderRepository {
     }
   }
 
+
+  // ✅ Broadcasted order headers (order + customer only)
+  Future<BroadcastOrderHeadersPage> fetchBroadcastedOrderHeadersByShop({
+    required int vendorId,
+    required int shopId,
+    int perPage = 10,
+    String? cursor,
+  }) async {
+    try {
+      final res = await _api.dio.get(
+        '/api/v1/vendors/$vendorId/shops/$shopId/orders/broadcasted',
+        queryParameters: {
+          'per_page': perPage,
+          if (cursor != null) 'cursor': cursor,
+        },
+      );
+
+      final data = res.data;
+      if (data is! Map<String, dynamic>) {
+        throw StateError('Unexpected response shape: ${data.runtimeType}');
+      }
+      return BroadcastOrderHeadersPage.fromJson(data);
+    } on DioException catch (e) {
+      throw VendorOrderRepositoryException(_dioMessage(e));
+    } catch (e) {
+      throw VendorOrderRepositoryException(e.toString());
+    }
+  }
+
   /// Generic action endpoint (status movement):
   /// POST /api/v1/vendors/{vendorId}/shops/{shopId}/orders/{orderId}/{actionSlug}
   ///
@@ -131,7 +160,7 @@ class VendorOrderRepository {
     required final shopId,
     required int orderId,
     Map<String, dynamic>? body,
-    String slug = 'weight-review',
+    String slug = 'weight_reviewed',
   }) async {
     try {
       final url = '/api/v1/vendors/$vendorId/shops/$shopId/orders/$orderId/$slug';
@@ -156,94 +185,99 @@ class VendorOrderRepository {
 
   /// Converts body to FormData automatically if it contains File(s).
   /// Otherwise sends JSON as-is.
-  Future<dynamic> _prepareRequestBody(Map<String, dynamic>? body) async {
-    if (body == null || body.isEmpty) return body;
+ Future<dynamic> _prepareRequestBody(Map<String, dynamic>? body) async {
+  if (body == null || body.isEmpty) return body;
 
-    final containsFiles = _hasFile(body);
-    if (!containsFiles) return body;
+  final containsFiles = _hasFile(body);
+  if (!containsFiles) return body;
 
-    final form = FormData();
+  final form = FormData();
 
-    for (final entry in body.entries) {
-      final key = entry.key;
-      final value = entry.value;
-      if (value == null) continue;
+  Future<void> addAny(String key, dynamic value) async {
+    if (value == null) return;
 
-      // Single file: image
-      if (value is File) {
-        form.files.add(
-          MapEntry(
-            key,
-            await MultipartFile.fromFile(
-              value.path,
-              filename: value.uri.pathSegments.isNotEmpty
-                  ? value.uri.pathSegments.last
-                  : 'upload.jpg',
-            ),
+    // ✅ Single file
+    if (value is File) {
+      form.files.add(
+        MapEntry(
+          key,
+          await MultipartFile.fromFile(
+            value.path,
+            filename: value.uri.pathSegments.isNotEmpty
+                ? value.uri.pathSegments.last
+                : 'upload.jpg',
           ),
-        );
-        continue;
-      }
+        ),
+      );
+      return;
+    }
 
-      // Multiple files: images
-      if (value is List<File>) {
-        for (final f in value) {
+    // ✅ List (could be List<File>, List<dynamic>, etc.)
+    if (value is List) {
+      // Files list
+      final files = value.whereType<File>().toList();
+      if (files.isNotEmpty) {
+        for (final f in files) {
           form.files.add(
             MapEntry(
               '$key[]',
               await MultipartFile.fromFile(
                 f.path,
-                filename:
-                    f.uri.pathSegments.isNotEmpty ? f.uri.pathSegments.last : 'upload.jpg',
+                filename: f.uri.pathSegments.isNotEmpty
+                    ? f.uri.pathSegments.last
+                    : 'upload.jpg',
               ),
             ),
           );
         }
-        continue;
+        return;
       }
 
-      // Lists
-      if (value is List) {
-        // List of maps -> key[0][field]
-        if (value.isNotEmpty && value.first is Map) {
-          for (int i = 0; i < value.length; i++) {
-            final item = value[i];
-            if (item is Map) {
-              for (final e in item.entries) {
-                final k = e.key.toString();
-                final v = e.value;
-                if (v == null) continue;
-                form.fields.add(MapEntry('$key[$i][$k]', v.toString()));
-              }
+      // List of maps -> key[0][field]
+      if (value.isNotEmpty && value.first is Map) {
+        for (int i = 0; i < value.length; i++) {
+          final item = value[i];
+          if (item is Map) {
+            for (final e in item.entries) {
+              final k = e.key.toString();
+              final v = e.value;
+              if (v == null) continue;
+              form.fields.add(MapEntry('$key[$i][$k]', v.toString()));
             }
           }
-        } else {
-          // Simple list -> key[]
-          for (final v in value) {
-            if (v == null) continue;
-            form.fields.add(MapEntry('$key[]', v.toString()));
-          }
         }
-        continue;
+        return;
       }
 
-      // Map -> key[sub]
-      if (value is Map) {
-        for (final e in value.entries) {
-          final k = e.key.toString();
-          final v = e.value;
-          if (v == null) continue;
-          form.fields.add(MapEntry('$key[$k]', v.toString()));
-        }
-        continue;
+      // Simple list -> key[]
+      for (final v in value) {
+        if (v == null) continue;
+        form.fields.add(MapEntry('$key[]', v.toString()));
       }
-
-      // Scalar
-      form.fields.add(MapEntry(key, value.toString()));
+      return;
     }
 
-    return form;
+    // ✅ Map: flatten one level (rare but useful)
+    if (value is Map) {
+      for (final e in value.entries) {
+        final k = e.key.toString();
+        final v = e.value;
+        if (v == null) continue;
+        form.fields.add(MapEntry('$key[$k]', v.toString()));
+      }
+      return;
+    }
+
+    // ✅ Primitive -> field
+    form.fields.add(MapEntry(key, value.toString()));
   }
+
+  for (final entry in body.entries) {
+    await addAny(entry.key, entry.value);
+  }
+
+  return form;
+}
 
   /// Detect File anywhere (including nested lists/maps)
   static bool _hasFile(dynamic value) {
@@ -282,4 +316,124 @@ String _dioMessage(DioException e) {
     return 'HTTP $status: ${e.message ?? 'Request failed'}';
   }
   return e.message ?? 'Network error';
+}
+
+
+
+// ✅ Models for /shops/{shopId}/broadcasts/headers
+class BroadcastOrderHeadersPage {
+  BroadcastOrderHeadersPage({required this.items, required this.cursor});
+
+  final List<BroadcastOrderHeader> items;
+  final String? cursor;
+
+  factory BroadcastOrderHeadersPage.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    final list = (data is List) ? data : const [];
+    return BroadcastOrderHeadersPage(
+      items: list
+          .whereType<Map<String, dynamic>>()
+          .map(BroadcastOrderHeader.fromJson)
+          .toList(),
+      cursor: json['cursor'] as String?,
+    );
+  }
+}
+
+class BroadcastOrderHeader {
+  BroadcastOrderHeader({
+    required this.orderId,
+    required this.broadcast,
+    required this.order,
+    required this.customer,
+  });
+
+  final int orderId;
+  final BroadcastMeta broadcast;
+  final BroadcastOrder order;
+  final BroadcastCustomer customer;
+
+  factory BroadcastOrderHeader.fromJson(Map<String, dynamic> json) {
+    return BroadcastOrderHeader(
+      orderId: (json['order_id'] as num?)?.toInt() ?? 0,
+      broadcast: BroadcastMeta.fromJson(
+        (json['broadcast'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+      order: BroadcastOrder.fromJson(
+        (json['order'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+      customer: BroadcastCustomer.fromJson(
+        (json['customer'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+    );
+  }
+}
+
+class BroadcastMeta {
+  BroadcastMeta({required this.status, required this.sentAt});
+
+  final String status;
+  final String? sentAt;
+
+  factory BroadcastMeta.fromJson(Map<String, dynamic> json) {
+    return BroadcastMeta(
+      status: (json['status'] ?? '').toString(),
+      sentAt: json['sent_at']?.toString(),
+    );
+  }
+}
+
+class BroadcastOrder {
+  BroadcastOrder({
+    required this.status,
+    required this.pickupMode,
+    required this.deliveryMode,
+    required this.currency,
+    required this.total,
+    required this.createdAt,
+  });
+
+  final String status;
+  final String pickupMode;
+  final String deliveryMode;
+  final String currency;
+  final String total;
+  final String createdAt;
+
+  factory BroadcastOrder.fromJson(Map<String, dynamic> json) {
+    return BroadcastOrder(
+      status: (json['status'] ?? '').toString(),
+      pickupMode: (json['pickup_mode'] ?? '').toString(),
+      deliveryMode: (json['delivery_mode'] ?? '').toString(),
+      currency: (json['currency'] ?? '').toString(),
+      total: (json['total'] ?? '').toString(),
+      createdAt: (json['created_at'] ?? '').toString(),
+    );
+  }
+}
+
+class BroadcastCustomer {
+  BroadcastCustomer({
+    required this.id,
+    required this.name,
+    required this.profilePhotoUrl,
+    required this.addressLine1,
+    required this.addressLine2,
+  });
+
+  final int id;
+  final String name;
+  final String? profilePhotoUrl;
+  final String? addressLine1;
+  final String? addressLine2;
+
+  factory BroadcastCustomer.fromJson(Map<String, dynamic> json) {
+    return BroadcastCustomer(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: (json['name'] ?? '').toString(),
+      profilePhotoUrl: json['profile_photo_url']?.toString(),
+      addressLine1: json['address_line1']?.toString(),
+      addressLine2: json['address_line2']?.toString(),
+    );
+  }
 }
