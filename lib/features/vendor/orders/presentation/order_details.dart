@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:labaduh/core/utils/submit_loading_provider.dart';
 
 import '../state/vendor_orders_provider.dart';
 import '../model/vendor_order_model.dart';
@@ -22,12 +24,12 @@ class OrderDetailsScreen extends ConsumerWidget {
   final int orderId;
   final int vendorId;
   final int shopId;
-
+  
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncOrders =
         ref.watch(vendorOrdersProvider((vendorId: vendorId, shopId: shopId)));
-
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order Details'),
@@ -51,6 +53,7 @@ class OrderDetailsScreen extends ConsumerWidget {
               buttonLabel: OrderStatusUtils.submitButtonLabel(
                 OrderStatusUtils.statusToLabel(order.status),
               ),
+              loadingKey: 'vendor_order_submit_${order.id}',
               onPressed: () => _handleSubmitStatus(
                 context: context,
                 ref: ref,
@@ -59,7 +62,8 @@ class OrderDetailsScreen extends ConsumerWidget {
             );
           }
 
-;
+          // No submit action for closed/terminal statuses.
+          return const SizedBox.shrink();
         },
       ),
 
@@ -114,11 +118,15 @@ class _OrderHeaderCard extends StatelessWidget {
     final grandTotalLabel = _money(grandTotal);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        initiallyExpanded: false,
+       margin: const EdgeInsets.only(bottom: 12),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent, // ✅ removes the 2 lines
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          initiallyExpanded: false,
 
         // 🔽 Collapsed: Order # + Grand Total
         title: Row(
@@ -293,6 +301,7 @@ class _OrderHeaderCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -470,10 +479,7 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Subtle styling that still reads well
-    final bg = Colors.grey.shade100;
-    final border = Colors.grey.shade300;
-
+    // Subtle styling that still reads well 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -529,75 +535,85 @@ class _InfoTile extends StatelessWidget {
 // Submit Bar (fixed bottom)
 // =======================================================
  
-
-class _SubmitBar extends StatelessWidget {
+class _SubmitBar extends ConsumerWidget {
   const _SubmitBar({
     required this.totalLabel,
     required this.orderStatus,
     required this.buttonLabel,
     required this.onPressed,
+    required this.loadingKey,
+    this.disabled = false,
   });
 
   final String totalLabel;
   final String orderStatus;
-  final String buttonLabel;     
-  final VoidCallback onPressed;
+  final String buttonLabel;
+  final Future<void> Function() onPressed;
+  final String loadingKey;
+  final bool disabled;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSubmitting = ref.watch(submitLoadingProvider(loadingKey));
+    final isDisabled = disabled || isSubmitting;
+
     return SafeArea(
       top: false,
-      child: Container(
-        height: _kSubmitBarHeight,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          border: Border(
-            top: BorderSide(color: Colors.black.withOpacity(.08)),
-          ),
-        ),
-        child: SizedBox(
-          width: double.infinity,   // ✅ FULL WIDTH
-          height: 48,               // slightly taller for UX
-          child: ElevatedButton(
-            onPressed: onPressed,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-            child: Text(
-              OrderStatusUtils.submitButtonLabel(
-                OrderStatusUtils.nextStatusCode(orderStatus),
-              ),
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
-              ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton(
+          onPressed: isDisabled
+              ? null
+              : () async {
+                  await ref
+                      .read(submitLoadingProvider(loadingKey).notifier)
+                      .run(() async {
+                    await onPressed();
+                    return true;
+                  });
+                },
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
             ),
           ),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 22), // ✅ little lift from menu
+            child: isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    OrderStatusUtils.submitButtonLabel(
+                      OrderStatusUtils.nextStatusCode(orderStatus),
+                    ),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+          ),
         ),
-
-              ),
+      ),
     );
   }
 }
+
 String _money(double value, {String symbol = '₱ '}) {
   return '$symbol${value.toStringAsFixed(2)}';
 }
+
 Future<void> _handleSubmitStatus({
   required BuildContext context,
   required WidgetRef ref,
   required VendorOrderModel order,
-
-  // 🔮 Future extensibility
   Map<String, dynamic>? fields,
   List<File>? images,
 }) async {
-
-  final nextSlug =
-      OrderStatusUtils.nextStatusCode(order.status);
+  final nextSlug = OrderStatusUtils.nextStatusCode(order.status);
 
   if (nextSlug == null) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -606,12 +622,40 @@ Future<void> _handleSubmitStatus({
     return;
   }
 
+  final confirmed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: const Text(
+        'Confirm Action',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      content: Text(
+        'Move order to\n${OrderStatusUtils.statusLabel(nextSlug)}?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Confirm'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed != true) return;
+
   try {
-    final repo =
-        ref.read(vendorOrderRepositoryProvider);
+    final repo = ref.read(vendorOrderRepositoryProvider);
 
     // =====================================================
-    // Build request body
+    // Build body
     // =====================================================
     Map<String, dynamic>? body;
 
@@ -619,18 +663,21 @@ Future<void> _handleSubmitStatus({
       body = {...fields};
     }
 
-    // Future: attach images
     if (images != null && images.isNotEmpty) {
       body ??= {};
       body['images'] = images;
     }
 
     // =====================================================
-    // Call API
+    // Session
     // =====================================================
-    final session = ref.watch(sessionNotifierProvider);
+    final session = ref.read(sessionNotifierProvider);
     final vendorId = session.vendorId;
     final shopId = session.activeShopId;
+
+    // =====================================================
+    // API Call
+    // =====================================================
     await repo.postStatusAction(
       vendorId: vendorId,
       shopId: shopId,
@@ -641,25 +688,38 @@ Future<void> _handleSubmitStatus({
 
     if (!context.mounted) return;
 
-    /*
-    //TODO: TO display message or not, since the status is already disabled by default
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Order moved from '
-          '${OrderStatusUtils.statusLabel(nextSlug)}',
-        ),
-      ),
-    );
-    */
-    // 🔄 Refresh providers
-    ref.invalidate(vendorOrdersProvider);
+    // =====================================================
+    // Refresh & WAIT for completion
+    // =====================================================
+    final params = (vendorId: vendorId, shopId: shopId);
+
+    ref.invalidate(vendorOrdersProvider(params as VendorShopParams));
+    await ref.read(vendorOrdersProvider(params as VendorShopParams).future);
 
   } catch (e) {
     if (!context.mounted) return;
 
+    String message = 'Something went wrong';
+
+    // ✅ If Dio error → extract API response
+    if (e is DioException) {
+      final data = e.response?.data;
+
+      if (data is Map && data['message'] != null) {
+        message = data['message'].toString();
+      } else if (data is String && data.isNotEmpty) {
+        message = data;
+      } else {
+        message = e.message ?? message;
+      }
+    } else {
+      message = e.toString();
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed: $e')),
+      SnackBar(content: Text('$message')),
     );
   }
 }
+
+

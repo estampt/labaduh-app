@@ -12,11 +12,14 @@
 // POST /api/v1/orders/{order}/propose-final
 
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../model/vendor_order_model.dart';
 
 class VendorOrderRepository {
   VendorOrderRepository(this._api);
+  
+  final vendorOrderSubmitLoadingProvider = StateProvider<bool>((ref) => false);
 
   final ApiClient _api;
 
