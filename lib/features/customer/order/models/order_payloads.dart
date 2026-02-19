@@ -8,7 +8,8 @@ class CreateOrderPayload {
 
   final int pickupAddressId;
   final int deliveryAddressId;
-
+  final DateTime? pickupWindowStart;
+  
   final List<CreateOrderItemPayload> items;
 
   CreateOrderPayload({
@@ -20,6 +21,7 @@ class CreateOrderPayload {
     required this.pickupAddressId,
     required this.deliveryAddressId,
     required this.items,
+    this.pickupWindowStart, // ✅ add
   });
 
   Map<String, dynamic> toJson() => {
@@ -30,7 +32,11 @@ class CreateOrderPayload {
         'delivery_mode': deliveryMode,
         'pickup_address_id': pickupAddressId,
         'delivery_address_id': deliveryAddressId,
+         // ✅ API expects this
+        if (pickupWindowStart != null)
+          'pickup_window_start': pickupWindowStart!.toIso8601String(),
         'items': items.map((e) => e.toJson()).toList(),
+
       };
 }
 

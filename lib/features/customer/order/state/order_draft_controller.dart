@@ -149,31 +149,34 @@ class OrderDraftState {
 
   /// ✅ Main payload builder used by submit provider
   CreateOrderPayload toCreatePayload() {
-    return CreateOrderPayload(
-      searchLat: lat,
-      searchLng: lng,
-      radiusKm: radiusKm,
-      pickupMode: pickupMode,
-      deliveryMode: deliveryMode,
-      pickupAddressId: pickupAddressId,
-      deliveryAddressId: deliveryAddressId,
-      items: services.map((s) {
-        return CreateOrderItemPayload(
-          serviceId: s.row.service.id,
-          qty: s.qty,
-          uom: s.uom,
-          pricingModel: 'tiered_min_plus',
-          minimum: s.minimum,
-          minPrice: s.minPrice,
-          pricePerUom: s.pricePerUom,
-          computedPrice: s.computedPrice,
+  return CreateOrderPayload(
+    searchLat: lat,
+    searchLng: lng,
+    radiusKm: radiusKm,
+    pickupMode: pickupMode,
+    deliveryMode: deliveryMode,
+    pickupAddressId: pickupAddressId,
+    deliveryAddressId: deliveryAddressId,
 
-          // ✅ v2: send selected add-ons/options
-          options: s.buildOptionPayloads(),
-        );
-      }).toList(),
-    );
-  }
+    // ✅ ADD THIS (API field: pickup_window_start)
+    pickupWindowStart: pickupWindowStart,
+
+    items: services.map((s) {
+      return CreateOrderItemPayload(
+        serviceId: s.row.service.id,
+        qty: s.qty,
+        uom: s.uom,
+        pricingModel: 'tiered_min_plus',
+        minimum: s.minimum,
+        minPrice: s.minPrice,
+        pricePerUom: s.pricePerUom,
+        computedPrice: s.computedPrice,
+        options: s.buildOptionPayloads(),
+      );
+    }).toList(),
+  );
+}
+
 
   // ✅ Backward-compat method (some parts of app call draft.CreateOrderPayload())
   // ignore: non_constant_identifier_names
@@ -205,35 +208,81 @@ class OrderDraftController extends Notifier<OrderDraftState> {
   }
 
   void setPickupMode(String v) {
-    // If leaving schedule, clear any previously picked window
-    if (v != 'schedule') {
-      state = state.copyWith(pickupMode: v, pickupWindowStart: null, pickupWindowEnd: null);
-    } else {
-      state = state.copyWith(pickupMode: v);
-    }
-  }
-  void setDeliveryMode(String v) => state = state.copyWith(deliveryMode: v);
+    final mode = v.toLowerCase();
 
+    // Rule:
+    // - asap     -> set pickupWindowStart = now (today)
+    // - tomorrow -> set pickupWindowStart = now + 1 day
+    // - schedule -> keep existing window (user will pick)
+    // - other    -> clear window
+
+    if (mode == 'asap') {
+      state = state.copyWith(
+        pickupMode: v,
+        pickupWindowStart: DateTime.now(),
+        pickupWindowEnd: null,
+      );
+      return;
+    }
+
+    if (mode == 'tomorrow') {
+      state = state.copyWith(
+        pickupMode: v,
+        pickupWindowStart: DateTime.now().add(const Duration(days: 1)),
+        pickupWindowEnd: null,
+      );
+      return;
+    }
+
+    if (mode == 'schedule') {
+      state = state.copyWith(pickupMode: v);
+      return;
+    }
+
+    state = state.copyWith(
+      pickupMode: v,
+      pickupWindowStart: null,
+      pickupWindowEnd: null,
+    );
+  }
 
   // ✅ Schedule window setters (used by OrderScheduleScreen)
   void setPickupWindow(DateTime start, DateTime end) {
-    state = state.copyWith(pickupWindowStart: start, pickupWindowEnd: end);
+    // Setting a window implies schedule mode.
+    state = state.copyWith(
+      pickupMode: 'schedule',
+      pickupWindowStart: start,
+      pickupWindowEnd: end,
+    );
   }
 
   void setPickupWindowStart(dynamic v) {
     final dt = _coerceDateTime(v);
-    state = state.copyWith(pickupWindowStart: dt);
+    state = state.copyWith(
+      pickupMode: 'schedule',
+      pickupWindowStart: dt,
+    );
   }
 
   void setPickupWindowEnd(dynamic v) {
     final dt = _coerceDateTime(v);
-    state = state.copyWith(pickupWindowEnd: dt);
+    state = state.copyWith(
+      pickupMode: 'schedule',
+      pickupWindowEnd: dt,
+    );
   }
 
   // Some screens may call these naming variants
   void setPickupDate(dynamic v) => setPickupWindowStart(v);
+
+  // Explicit schedule setter (also forces pickupMode to 'schedule')
   void setScheduledPickupDate(dynamic v) => setPickupWindowStart(v);
 
+
+  
+  void setDeliveryMode(String v) => state = state.copyWith(deliveryMode: v);
+
+ 
   DateTime? _coerceDateTime(dynamic v) {
     if (v == null) return null;
     if (v is DateTime) return v;

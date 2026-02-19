@@ -326,31 +326,99 @@ class _IncomingOrderTile extends StatelessWidget {
 
     final addr1 = (c.addressLine1 ?? '').trim();
     final addr2 = (c.addressLine2 ?? '').trim();
+
     final address = [
       if (addr1.isNotEmpty) addr1,
       if (addr2.isNotEmpty) addr2,
     ].join('\n');
 
+    final totalLabel = '${o.currency} ${o.total}';
+
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Text(
-            (c.name.isNotEmpty ? c.name[0] : '?').toUpperCase(),
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// LEFT CONTENT
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// Customer Name
+                  Text(
+                    c.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  /// Address
+                  if (address.isNotEmpty)
+                    Text(
+                      address,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade700,
+                        height: 1.35,
+                      ),
+                    ),
+
+                  const SizedBox(height: 8),
+
+                  /// Modes
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _ModeChip(
+                        icon: Icons.schedule_outlined,
+                        label: o.pickupMode,
+                      ),
+                      _ModeChip(
+                        icon: Icons.local_shipping_outlined,
+                        label: o.deliveryMode,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            /// RIGHT — TOTAL AMOUNT
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  'TOTAL',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey,
+                    letterSpacing: .6,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  totalLabel,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(
-          [
-            if (address.isNotEmpty) address,
-            '${o.currency} ${o.total} • ${o.pickupMode} • ${o.deliveryMode}',
-          ].join('\n'),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: _StatusPill(text: o.status),
       ),
     );
   }
@@ -455,6 +523,42 @@ class _MenuTile extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _ModeChip extends StatelessWidget {
+  const _ModeChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.grey.shade100,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.grey.shade700),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

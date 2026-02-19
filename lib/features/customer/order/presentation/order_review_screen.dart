@@ -196,42 +196,67 @@ String _deliveryMethodText(dynamic draft) {
 /// Returns a formatted pickup date if pickupMode == schedule.
 /// Supports DateTime or ISO-8601 string fields.
 String? _scheduledPickupDateText(dynamic draft, BuildContext context) {
-  final mode = (draft.pickupMode ?? '').toString();
-  if (mode != 'schedule') return null;
+  final mode = (draft.pickupMode ?? '').toString().toLowerCase();
 
   DateTime? dt;
 
-  // Common field names (try what exists in your draft model)
-  try {
-    final v = (draft as dynamic).pickupWindowStart;
-    if (v is DateTime) dt = v;
-    if (v is String) dt = DateTime.tryParse(v);
-  } catch (_) {}
+  // =========================================
+  // ASAP → Today
+  // =========================================
+  if (mode == 'asap') {
+    dt = DateTime.now();
+  }
 
-  if (dt == null) {
+  // =========================================
+  // Tomorrow → Now + 1 day
+  // =========================================
+  else if (mode == 'tomorrow') {
+    dt = DateTime.now().add(const Duration(days: 1));
+  }
+
+  // =========================================
+  // Schedule → Existing logic
+  // =========================================
+  else if (mode == 'schedule') {
+    // Try pickupWindowStart
     try {
-      final v = (draft as dynamic).scheduledPickupDate;
+      final v = (draft as dynamic).pickupWindowStart;
       if (v is DateTime) dt = v;
       if (v is String) dt = DateTime.tryParse(v);
     } catch (_) {}
+
+    // Try scheduledPickupDate
+    if (dt == null) {
+      try {
+        final v = (draft as dynamic).scheduledPickupDate;
+        if (v is DateTime) dt = v;
+        if (v is String) dt = DateTime.tryParse(v);
+      } catch (_) {}
+    }
+
+    // Try pickupDate
+    if (dt == null) {
+      try {
+        final v = (draft as dynamic).pickupDate;
+        if (v is DateTime) dt = v;
+        if (v is String) dt = DateTime.tryParse(v);
+      } catch (_) {}
+    }
+
+    if (dt == null) {
+      return 'Not set';
+    }
   }
 
-  if (dt == null) {
-    try {
-      final v = (draft as dynamic).pickupDate;
-      if (v is DateTime) dt = v;
-      if (v is String) dt = DateTime.tryParse(v);
-    } catch (_) {}
-  }
-
-  if (dt == null) {
-    // Mode is schedule but date missing
-    return 'Not set';
-  }
+  // =========================================
+  // Unknown / Null Mode
+  // =========================================
+  if (dt == null) return null;
 
   final loc = MaterialLocalizations.of(context);
   return loc.formatMediumDate(dt.toLocal());
 }
+
 
 class _ReviewKeyValueRow extends StatelessWidget {
   const _ReviewKeyValueRow({
