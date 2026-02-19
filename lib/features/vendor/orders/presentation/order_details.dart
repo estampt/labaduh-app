@@ -32,8 +32,30 @@ class OrderDetailsScreen extends ConsumerWidget {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order Details'),
-      ),
+      title: const Text('Order Details'),
+      actions: [
+        IconButton(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh),
+          onPressed: () {
+            // 🔁 Force refresh vendor orders
+            ref.invalidate(
+              vendorOrdersProvider(
+                (vendorId: vendorId, shopId: shopId),
+              ),
+            );
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Refreshing order...'),
+                duration: Duration(milliseconds: 700),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
+
       bottomNavigationBar: asyncOrders.when(
         loading: () => const SizedBox.shrink(),
         error: (_, __) => const SizedBox.shrink(),
@@ -67,30 +89,61 @@ class OrderDetailsScreen extends ConsumerWidget {
         },
       ),
 
-      body: asyncOrders.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (orders) {
-          final order = orders.firstWhere(
-            (o) => o.id == orderId,
-            orElse: () => throw Exception('Order not found'),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // 🔁 Invalidate provider
+          ref.invalidate(
+            vendorOrdersProvider((vendorId: vendorId, shopId: shopId)),
           );
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16 + _kSubmitBarHeight),
-            children: [
-              _CustomerCard(order: order),
-              const SizedBox(height: 12), 
-
-              _OrderHeaderCard(order: order),
-              const SizedBox(height: 12),
-
-//              _ItemsCard(order: order),
-            ],
+          // ⏳ Wait until new data loads
+          await ref.read(
+            vendorOrdersProvider((vendorId: vendorId, shopId: shopId)).future,
           );
         },
+        child: asyncOrders.when(
+          loading: () => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 200),
+              Center(child: CircularProgressIndicator()),
+            ],
+          ),
+          error: (e, _) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text('Error: $e'),
+              const SizedBox(height: 12),
+              const Text('Pull down to retry.'),
+            ],
+          ),
+          data: (orders) {
+            final order = orders.firstWhere(
+              (o) => o.id == orderId,
+              orElse: () => throw Exception('Order not found'),
+            );
+
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(), // required
+              padding: const EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + _kSubmitBarHeight,
+              ),
+              children: [
+                _CustomerCard(order: order),
+                const SizedBox(height: 12),
+                _OrderHeaderCard(order: order),
+                const SizedBox(height: 12),
+              ],
+            );
+          },
+        ),
       ),
-    );
+
+      );
   }
 }
 
