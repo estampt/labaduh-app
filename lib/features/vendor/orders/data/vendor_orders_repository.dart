@@ -4,21 +4,25 @@
 // Uses ApiClient (Dio) and provides:
 // - getActiveOrders(vendorId, shopId)
 // - fetchShopOrders(vendorId, shopId, cursor)
-// - placeholders for ALL your POST status actions
+// - postStatusAction(...) for normal status movements (JSON only)
+// - postWeightReview(...) dedicated endpoint for weight updates (supports multipart + files)
 //
-// Endpoints (as you listed):
+// Endpoints (as used here):
 // GET  /api/v1/vendors/{vendorId}/shops/{shopId}/orders
-// POST /api/v1/orders/{order}/{actionSlug}
-// POST /api/v1/orders/{order}/propose-final
+// POST /api/v1/vendors/{vendorId}/shops/{shopId}/orders/{orderId}/{actionSlug}
+// POST /api/v1/vendors/{vendorId}/shops/{shopId}/orders/{orderId}/weight-review
+
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../model/vendor_order_model.dart';
 
 class VendorOrderRepository {
   VendorOrderRepository(this._api);
-  
+
   final vendorOrderSubmitLoadingProvider = StateProvider<bool>((ref) => false);
 
   final ApiClient _api;
@@ -59,9 +63,12 @@ class VendorOrderRepository {
     }
   }
 
-  /// Generic action endpoint:
-  /// POST /api/v1/orders/{orderId}/{actionSlug}
-  Future<VendorOrderModel?> postStatusAction({ 
+  /// Generic action endpoint (status movement):
+  /// POST /api/v1/vendors/{vendorId}/shops/{shopId}/orders/{orderId}/{actionSlug}
+  ///
+  /// IMPORTANT: This method is JSON-only.
+  /// If you need to upload images / weight details, use [postWeightReview] instead.
+  Future<VendorOrderModel?> postStatusAction({
     required final vendorId,
     required final shopId,
     required int orderId,
@@ -69,7 +76,15 @@ class VendorOrderRepository {
     Map<String, dynamic>? body,
   }) async {
     try {
-      
+      // 🔒 Guard: if payload contains files, force devs to use the dedicated endpoint.
+      // This prevents weight submissions from being accidentally executed alongside
+      // normal status movements.
+      if (_hasFile(body)) {
+        throw VendorOrderRepositoryException(
+          'Payload contains file(s). Use postWeightReview(...) instead of postStatusAction(...).',
+        );
+      }
+
       final res = await _api.dio.post(
         '/api/v1/vendors/$vendorId/shops/$shopId/orders/$orderId/$actionSlug',
         data: body,
@@ -82,7 +97,6 @@ class VendorOrderRepository {
           return VendorOrderModel.fromJson(maybe);
         }
       }
-      // If backend returns no order object, just return null.
       return null;
     } on DioException catch (e) {
       throw VendorOrderRepositoryException(_dioMessage(e));
@@ -91,52 +105,154 @@ class VendorOrderRepository {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ API placeholders for your routes (action slugs match Laravel routes)
-  // ---------------------------------------------------------------------------
-  /*
-  Future<VendorOrderModel?> pickupScheduled({required int orderId,}) =>
-      postStatusAction(shopId: shopId,  orderId: orderId, actionSlug: 'pickup-scheduled');
-
-  Future<VendorOrderModel?> pickedUp({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'picked-up');
-
-  Future<VendorOrderModel?> weightReviewed({
+  /// Weight review endpoint (separate from status actions)
+  /// POST /api/v1/vendors/{vendorId}/shops/{shopId}/orders/{orderId}/weight-review
+  ///
+  /// Use this for sending:
+  /// - order_item_id
+  /// - item_qty
+  /// - uploaded
+  /// - notes
+  /// - image (File)
+  /// - images (List<File>)
+  ///
+  /// Body example:
+  /// {
+  ///   "weight_kg": 12.5,
+  ///   "notes": "optional",
+  ///   "items": [
+  ///     {"order_item_id": 344, "item_qty": 3, "uploaded": 0, "notes": "bedsheets"}
+  ///   ],
+  ///   "image": File(...),
+  ///   "images": [File(...), ...]
+  /// }
+  Future<VendorOrderModel?> postWeightReview({
+    required final vendorId,
+    required final shopId,
     required int orderId,
-    Map<String, dynamic>? payload, // e.g. { "actual_weight": 7.5, ... }
-  }) =>
-      postStatusAction(orderId: orderId, actionSlug: 'weight-reviewed', body: payload);
+    Map<String, dynamic>? body,
+    String slug = 'weight-review',
+  }) async {
+    try {
+      final url = '/api/v1/vendors/$vendorId/shops/$shopId/orders/$orderId/$slug';
+      final payload = await _prepareRequestBody(body);
 
-  Future<VendorOrderModel?> weightAccepted({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'weight-accepted');
+      final res = await _api.dio.post(url, data: payload);
 
-  Future<VendorOrderModel?> startWashing({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'start-washing');
+      final data = res.data;
+      if (data is Map<String, dynamic>) {
+        final maybe = data['data'];
+        if (maybe is Map<String, dynamic>) {
+          return VendorOrderModel.fromJson(maybe);
+        }
+      }
+      return null;
+    } on DioException catch (e) {
+      throw VendorOrderRepositoryException(_dioMessage(e));
+    } catch (e) {
+      throw VendorOrderRepositoryException(e.toString());
+    }
+  }
 
-  Future<VendorOrderModel?> ready({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'ready');
+  /// Converts body to FormData automatically if it contains File(s).
+  /// Otherwise sends JSON as-is.
+  Future<dynamic> _prepareRequestBody(Map<String, dynamic>? body) async {
+    if (body == null || body.isEmpty) return body;
 
-  Future<VendorOrderModel?> deliveryScheduled({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'delivery-scheduled');
+    final containsFiles = _hasFile(body);
+    if (!containsFiles) return body;
 
-  Future<VendorOrderModel?> outForDelivery({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'out-for-delivery');
+    final form = FormData();
 
-  Future<VendorOrderModel?> delivered({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'delivered');
+    for (final entry in body.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (value == null) continue;
 
-  Future<VendorOrderModel?> completed({required int orderId}) =>
-      postStatusAction(orderId: orderId, actionSlug: 'completed');
+      // Single file: image
+      if (value is File) {
+        form.files.add(
+          MapEntry(
+            key,
+            await MultipartFile.fromFile(
+              value.path,
+              filename: value.uri.pathSegments.isNotEmpty
+                  ? value.uri.pathSegments.last
+                  : 'upload.jpg',
+            ),
+          ),
+        );
+        continue;
+      }
 
-  /// Repricing proposal
-  /// POST /api/v1/orders/{order}/propose-final
-  Future<VendorOrderModel?> proposeFinal({
-    required int orderId,
-    required Map<String, dynamic> payload, // placeholder
-  }) =>
-      postStatusAction(orderId: orderId, actionSlug: 'propose-final', body: payload);
+      // Multiple files: images
+      if (value is List<File>) {
+        for (final f in value) {
+          form.files.add(
+            MapEntry(
+              '$key[]',
+              await MultipartFile.fromFile(
+                f.path,
+                filename:
+                    f.uri.pathSegments.isNotEmpty ? f.uri.pathSegments.last : 'upload.jpg',
+              ),
+            ),
+          );
+        }
+        continue;
+      }
 
-      */
+      // Lists
+      if (value is List) {
+        // List of maps -> key[0][field]
+        if (value.isNotEmpty && value.first is Map) {
+          for (int i = 0; i < value.length; i++) {
+            final item = value[i];
+            if (item is Map) {
+              for (final e in item.entries) {
+                final k = e.key.toString();
+                final v = e.value;
+                if (v == null) continue;
+                form.fields.add(MapEntry('$key[$i][$k]', v.toString()));
+              }
+            }
+          }
+        } else {
+          // Simple list -> key[]
+          for (final v in value) {
+            if (v == null) continue;
+            form.fields.add(MapEntry('$key[]', v.toString()));
+          }
+        }
+        continue;
+      }
+
+      // Map -> key[sub]
+      if (value is Map) {
+        for (final e in value.entries) {
+          final k = e.key.toString();
+          final v = e.value;
+          if (v == null) continue;
+          form.fields.add(MapEntry('$key[$k]', v.toString()));
+        }
+        continue;
+      }
+
+      // Scalar
+      form.fields.add(MapEntry(key, value.toString()));
+    }
+
+    return form;
+  }
+
+  /// Detect File anywhere (including nested lists/maps)
+  static bool _hasFile(dynamic value) {
+    if (value == null) return false;
+    if (value is File) return true;
+    if (value is List) return value.any(_hasFile);
+    if (value is Map) return value.values.any(_hasFile);
+    return false;
+  }
 }
 
 // ----------------------------
