@@ -334,116 +334,105 @@ class _IncomingOrderTile extends StatelessWidget {
 
     final totalLabel = '${o.currency} ${o.total}';
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// LEFT CONTENT
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {
+        context.go(
+          '/v/orders/${item.orderId}', // 🔥 deeplink
+        );
+      },
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              /// LEFT CONTENT
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    /// Customer Name
+                    Text(
+                      c.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    /// Address
+                    if (address.isNotEmpty)
+                      Text(
+                        address,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.grey.shade700,
+                          height: 1.35,
+                        ),
+                      ),
+
+                    const SizedBox(height: 8),
+
+                    /// Modes
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _ModeChip(
+                          icon: Icons.schedule_outlined,
+                          label: o.pickupMode,
+                        ),
+                        _ModeChip(
+                          icon: Icons.local_shipping_outlined,
+                          label: o.deliveryMode,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              /// RIGHT — TOTAL AMOUNT
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  /// Customer Name
-                  Text(
-                    c.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
+                  const Text(
+                    'TOTAL',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey,
+                      letterSpacing: .6,
                     ),
                   ),
-
-                  const SizedBox(height: 6),
-
-                  /// Address
-                  if (address.isNotEmpty)
-                    Text(
-                      address,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: Colors.grey.shade700,
-                        height: 1.35,
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    totalLabel,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
                     ),
-
-                  const SizedBox(height: 8),
-
-                  /// Modes
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      _ModeChip(
-                        icon: Icons.schedule_outlined,
-                        label: o.pickupMode,
-                      ),
-                      _ModeChip(
-                        icon: Icons.local_shipping_outlined,
-                        label: o.deliveryMode,
-                      ),
-                    ],
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(width: 12),
-
-            /// RIGHT — TOTAL AMOUNT
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text(
-                  'TOTAL',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey,
-                    letterSpacing: .6,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  totalLabel,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+
   }
 }
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-      ),
-    );
-  }
-}
-
+ 
 class _StatCard extends StatelessWidget {
   const _StatCard({
     required this.title,

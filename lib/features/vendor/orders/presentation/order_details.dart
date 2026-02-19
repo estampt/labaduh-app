@@ -916,49 +916,57 @@ class _SubmitBar extends ConsumerWidget {
     final isSubmitting = ref.watch(submitLoadingProvider(loadingKey));
     final isDisabled = disabled || isSubmitting;
 
+    const lift = 10.0; // 👈 how high you want it raised
+
     return SafeArea(
       top: false,
       child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton(
-          onPressed: isDisabled
-              ? null
-              : () async {
-                  await ref
-                      .read(submitLoadingProvider(loadingKey).notifier)
-                      .run(() async {
-                    await onPressed();
-                    return true;
-                  });
-                },
-          style: ElevatedButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-          ),
+        // ✅ make the whole bar taller, so it has "air" below the button
+        height: 48 + lift,
+        child: Align(
+          alignment: Alignment.topCenter, // ✅ button sits higher
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 22), // ✅ little lift from menu
-            child: isSubmitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    OrderStatusUtils.submitButtonLabel(
-                      OrderStatusUtils.nextStatusCode(orderStatus),
-                    ),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: isDisabled
+                    ? null
+                    : () async {
+                        await ref
+                            .read(submitLoadingProvider(loadingKey).notifier)
+                            .run(() async {
+                          await onPressed();
+                          return true;
+                        });
+                      },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          OrderStatusUtils.submitButtonLabel(
+                            OrderStatusUtils.nextStatusCode(orderStatus),
+                          ),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
+
 }
 
 String _money(double value, {String symbol = '₱ '}) {

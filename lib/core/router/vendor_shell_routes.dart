@@ -1,4 +1,6 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:labaduh/core/auth/session_notifier.dart';
 
 import '../../features/vendor/shell/presentation/vendor_shell.dart';
 import '../../features/vendor/dashboard/presentation/vendor_dashboard_tab.dart';
@@ -24,37 +26,43 @@ final List<RouteBase> vendorShellRoutes = [
     branches: [
       StatefulShellBranch(
         routes: [
-          GoRoute(path: '/v/home', builder: (context, state) => const VendorDashboardTab()),
+          GoRoute(
+            path: '/v/orders',
+            builder: (context, state) => const VendorOrdersTab(),
+
+            routes: [
+              // =========================================================
+              // ORDER DETAILS
+              // URL → /v/orders/231
+              // =========================================================
+              GoRoute(
+                path: ':id',
+                builder: (context, state) {
+                  final orderId =
+                      int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+
+                  return Consumer(
+                    builder: (context, ref, _) {
+                      final session = ref.read(sessionNotifierProvider);
+
+                      final vendorId =
+                          int.tryParse(session.vendorId ?? '0') ?? 0;
+                      final shopId = session.activeShopId ?? 0;
+
+                      return OrderDetailsScreen(
+                        orderId: orderId,
+                        vendorId: vendorId,
+                        shopId: shopId,
+                      );
+                    },
+                  );
+                }, 
+              ),
+            ],
+          ),
         ],
       ),
-      StatefulShellBranch(
-  routes: [
-    GoRoute(
-      path: '/v/orders',
-      builder: (context, state) => const VendorOrdersTab(),
 
-      routes: [
-        GoRoute(
-          path: ':id',
-          builder: (context, state) {
-            final orderId =
-                int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-
-            // TODO: Replace these with your real providers/session values
-            const vendorId = 2;
-            const shopId = 2;
-
-            return OrderDetailsScreen(
-              orderId: orderId,
-              vendorId: vendorId,
-              shopId: shopId,
-            );
-          },
-        ),
-      ],
-    ),
-  ],
-),
 
       StatefulShellBranch(
         routes: [

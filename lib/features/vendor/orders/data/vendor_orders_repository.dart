@@ -64,6 +64,49 @@ class VendorOrderRepository {
   }
 
 
+   Future<List<VendorOrderModel>?> getOrderBroadCast({
+    required int vendorId,
+    required int shopId,
+    required int orderId,
+  }) async {
+    final page = await fetchOrderBroadCast(
+      vendorId: vendorId,
+      shopId: shopId,
+      orderId: orderId,
+      cursor: null,
+    );
+    return page.orders;
+  }
+
+
+  Future<VendorOrdersPage> fetchOrderBroadCast({
+    required int vendorId,
+    required int shopId,
+    required int orderId,
+    String? cursor,
+  }) async {
+    try {
+      final res = await _api.dio.get(
+        '/api/v1/vendors/$vendorId/shops/$shopId/orderBroadcast',
+        queryParameters: {
+          if (cursor != null) 'cursor': cursor,
+          if (orderId != null) 'order_id': orderId, // ✅ added
+        },
+      );
+      final data = res.data;
+      if (data is! Map<String, dynamic>) {
+        throw StateError('Unexpected response shape: ${data.runtimeType}');
+      }
+
+      return VendorOrdersPage.fromJson(data);
+    } on DioException catch (e) {
+      throw VendorOrderRepositoryException(_dioMessage(e));
+    } catch (e) {
+      throw VendorOrderRepositoryException(e.toString());
+    }
+  }
+
+
   // ✅ Broadcasted order headers (order + customer only)
   Future<BroadcastOrderHeadersPage> fetchBroadcastedOrderHeadersByShop({
     required int vendorId,
@@ -287,6 +330,8 @@ class VendorOrderRepository {
     if (value is Map) return value.values.any(_hasFile);
     return false;
   }
+
+  Future<void> acceptOrder({required int vendorId, required int shopId, required int orderId}) async {}
 }
 
 // ----------------------------
