@@ -96,7 +96,7 @@ class CustomerOrdersApi {
   }
 
   Future<Order> weightAccepted(int orderId) async {
-    final res = await dio.post('/api/v1/customer/orders/$orderId/weight-accepted');
+    final res = await dio.post('/api/v1/customer/orders/$orderId/weight_accepted');
     final data = (res.data as Map?)?['data'];
     if (data == null) {
       throw DioException(
@@ -108,7 +108,7 @@ class CustomerOrdersApi {
   }
 
   Future<Order> confirmDelivery(int orderId) async {
-    final res = await dio.post('/api/v1/customer/orders/$orderId/confirm-delivery');
+    final res = await dio.post('/api/v1/customer/orders/$orderId/confirm_delivery');
     final data = (res.data as Map?)?['data'];
     if (data == null) {
       throw DioException(

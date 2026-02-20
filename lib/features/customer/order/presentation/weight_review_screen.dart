@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:labaduh/core/network/api_client.dart'; 
 import 'package:labaduh/features/customer/order/models/customer_order_model.dart';
@@ -186,92 +187,97 @@ class _WeightReviewScreenState extends ConsumerState<WeightReviewScreen> {
     );
   }
 
-  Future<void> _confirmWeight(CustomerOrder order) async {
-    if (_submitting) return;
+  Future<void> _confirmWeight(
+  BuildContext context,
+  WidgetRef ref,
+  CustomerOrder order,
+) async {
+  final rootNav = Navigator.of(context, rootNavigator: true);
 
-    // ✅ 1) Confirm dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm acceptance'),
-        content: const Text('Do you want to accept this order?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('CANCEL'),
+  /// ✅ 1) Confirmation dialog
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Confirm weight'),
+      content: const Text('Do you want to confirm the reviewed weight?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('CANCEL'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('CONFIRM'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed != true) return;
+
+  bool loadingShown = false;
+
+  /// ✅ 2) Show loading popup
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('ACCEPT'),
-          ),
+          SizedBox(width: 12),
+          Text('Confirming weight...'),
         ],
       ),
+    ),
+  );
+
+  loadingShown = true;
+
+  try {
+    /// ✅ 3) API call
+    final client = ref.read(apiClientProvider);
+    final api = CustomerOrdersApi(client.dio);
+
+    await api.weightAccepted(order.id);
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Weight confirmed.')),
     );
 
-    if (confirmed != true) return;
+    /// ✅ 4) Small delay so user sees loading
+    await Future.delayed(const Duration(milliseconds: 600));
 
-    setState(() => _submitting = true);
+    if (!context.mounted) return;
 
-    // ✅ 2) Loading dialog (blocking)
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        content: SizedBox(
-          height: 70,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  'Confirming weight...',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    /// ✅ 5) Close loading first, then go back to previous screen
+    if (loadingShown && rootNav.canPop()) {
+      rootNav.pop(); // closes the loading dialog
+      loadingShown = false;
+    }
+
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true); // return to previous screen (optionally with result)
+    }
+  } catch (e) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed: $e')),
     );
-
-    try {
-      final client = ref.read(apiClientProvider);
-      final api = CustomerOrdersApi(client.dio);
-
-      // ✅ 3) Call API via CustomerOrdersApi
-      await api.weightAccepted(widget.orderId);
-
-      if (!mounted) return;
-
-      // ✅ close loading dialog
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Weight confirmed.')),
-      );
-
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      debugPrint('❌ confirmWeight failed: $e');
-      if (!mounted) return;
-
-      // ✅ close loading dialog
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+  } finally {
+    /// ✅ ALWAYS close loading popup (if still open)
+    if (loadingShown && context.mounted && rootNav.canPop()) {
+      rootNav.pop();
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -568,7 +574,7 @@ class _WeightReviewScreenState extends ConsumerState<WeightReviewScreen> {
                 height: 52,
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: disabled ? null : () => _confirmWeight(order!),
+                  onPressed: disabled ? null : () => _confirmWeight(context, ref, order),
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(999),
