@@ -238,7 +238,7 @@ class VendorDashboardTab extends ConsumerWidget {
                   children: [
                     const Text('Incoming', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                     const SizedBox(height: 8),
-                    ...items.take(5).map((it) => _IncomingOrderTile(item: it)),
+                    ...items.take(50).map((it) => _IncomingOrderTile(item: it)),
                   ],
                 );
               },

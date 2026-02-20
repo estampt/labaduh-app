@@ -45,7 +45,7 @@ class OrderAcceptanceScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Broadcast Id #$broadcastId'),
+        title: Text('Broadcast Id $broadcastId'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

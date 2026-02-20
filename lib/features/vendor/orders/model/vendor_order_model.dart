@@ -1,5 +1,6 @@
 // vendor_order_model.dart
 import 'package:labaduh/core/utils/order_status_utils.dart';
+ import 'dart:convert';
 
 class VendorOrdersPage {
   const VendorOrdersPage({
@@ -58,75 +59,149 @@ class VendorOrderModel {
   final List<String> services;
   final List<VendorOrderItemModel> items;
 
-  factory VendorOrderModel.fromJson(Map<String, dynamic> json) {
-    // ✅ Support BOTH shapes:
-    // A) vendor orders endpoint: { id, status, subtotal, ... }
-    // B) broadcast endpoint: { order_id, order:{status,total,created_at}, customer:{...}, items:[...] }
 
-    final orderObj = (json['order'] is Map)
-        ? (json['order'] as Map).cast<String, dynamic>()
-        : const <String, dynamic>{};
 
-    final id = _toInt(json['id']) ?? _toInt(json['order_id']) ?? 0;
+factory VendorOrderModel.fromJson(Map<String, dynamic> json) {
+ 
 
-    final status =
-        (json['status'] as String?) ?? (orderObj['status'] as String?) ?? 'unknown';
+  // ==========================================================
+  // ✅ SUPPORT BOTH SHAPES
+  // ==========================================================
 
-    final createdAt = _toDateTime(json['created_at']) ?? _toDateTime(orderObj['created_at']);
-    final updatedAt = _toDateTime(json['updated_at']) ?? _toDateTime(orderObj['updated_at']);
+  final orderObj = (json['order'] is Map)
+      ? (json['order'] as Map).cast<String, dynamic>()
+      : const <String, dynamic>{};
 
-    final items = (json['items'] as List<dynamic>? ?? const [])
-        .whereType<Map>()
-        .map((e) => VendorOrderItemModel.fromJson(e.cast<String, dynamic>()))
-        .toList(growable: false);
+  final broadcastObj = (json['broadcast'] is Map)
+      ? (json['broadcast'] as Map).cast<String, dynamic>()
+      : const <String, dynamic>{};
 
-    // totals
-    final subtotal = _toDouble(json['subtotal']) ??
-        _toDouble(orderObj['subtotal']) ??
-        // broadcast only has `order.total` in your payload:
-        _toDouble(orderObj['total']) ??
-        // fallback: sum computed lines
-        items.fold<double>(0, (sum, it) => sum + it.totalComputed);
+  // ==========================================================
+  // IDS
+  // ==========================================================
 
-    final deliveryFee = _toDouble(json['delivery_fee']) ?? _toDouble(orderObj['delivery_fee']) ?? 0;
-    final serviceFee = _toDouble(json['service_fee']) ?? _toDouble(orderObj['service_fee']) ?? 0;
-    final discount = _toDouble(json['discount']) ?? _toDouble(orderObj['discount']) ?? 0;
+  final id =
+      _toInt(json['id']) ??
+      _toInt(json['order_id']) ??
+      _toInt(orderObj['order_id']) ??
+      0;
 
-    final shopId = _toInt(json['shop_id']) ?? 0;
+  final broadcastId =
+      _toInt(json['broadcast_id']) ??
+      _toInt(broadcastObj['broadcast_id']);
 
-    final customer = (json['customer'] is Map)
-        ? VendorCustomerModel.fromJson((json['customer'] as Map).cast<String, dynamic>())
-        : null;
+  // ==========================================================
+  // STATUS
+  // ==========================================================
 
-    final acceptedShop = (json['accepted_shop'] is Map)
-        ? VendorShopModel.fromJson((json['accepted_shop'] as Map).cast<String, dynamic>())
-        : null;
+  final status =
+      (json['status'] as String?) ??
+      (orderObj['status'] as String?) ??
+      'unknown';
 
-    final services = items
-        .map((it) => it.service?.displayName ?? 'Service')
-        .where((s) => s.trim().isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+  final broadcastStatus =
+      (broadcastObj['status'] as String?) ?? 'unknown';
 
-    final itemsCount = _toInt(json['items_count']) ?? items.length;
+  // ==========================================================
+  // DATES
+  // ==========================================================
 
-    return VendorOrderModel(
-      id: id,
-      status: status,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      subtotal: subtotal,
-      deliveryFee: deliveryFee,
-      serviceFee: serviceFee,
-      discount: discount,
-      shopId: shopId,
-      acceptedShop: acceptedShop,
-      customer: customer,
-      itemsCount: itemsCount,
-      services: services,
-      items: items,
-    );
-  }
+  final createdAt =
+      _toDateTime(json['created_at']) ??
+      _toDateTime(orderObj['created_at']);
+
+  final updatedAt =
+      _toDateTime(json['updated_at']) ??
+      _toDateTime(orderObj['updated_at']);
+
+  // ==========================================================
+  // ITEMS
+  // ==========================================================
+
+  final items = (json['items'] as List<dynamic>? ?? const [])
+      .whereType<Map>()
+      .map((e) => VendorOrderItemModel.fromJson(
+            e.cast<String, dynamic>(),
+          ))
+      .toList(growable: false);
+
+  // ==========================================================
+  // TOTALS
+  // ==========================================================
+
+  final subtotal =
+      _toDouble(json['subtotal']) ??
+      _toDouble(orderObj['subtotal']) ??
+      _toDouble(orderObj['total']) ??
+      items.fold<double>(0, (sum, it) => sum + it.totalComputed);
+
+  final deliveryFee =
+      _toDouble(json['delivery_fee']) ??
+      _toDouble(orderObj['delivery_fee']) ??
+      0;
+
+  final serviceFee =
+      _toDouble(json['service_fee']) ??
+      _toDouble(orderObj['service_fee']) ??
+      0;
+
+  final discount =
+      _toDouble(json['discount']) ??
+      _toDouble(orderObj['discount']) ??
+      0;
+
+  // ==========================================================
+  // RELATIONS
+  // ==========================================================
+
+  final shopId = _toInt(json['shop_id']) ?? 0;
+
+  final customer = (json['customer'] is Map)
+      ? VendorCustomerModel.fromJson(
+          (json['customer'] as Map).cast<String, dynamic>(),
+        )
+      : null;
+
+  final acceptedShop = (json['accepted_shop'] is Map)
+      ? VendorShopModel.fromJson(
+          (json['accepted_shop'] as Map).cast<String, dynamic>(),
+        )
+      : null;
+
+  // ==========================================================
+  // SERVICES SUMMARY
+  // ==========================================================
+
+  final services = items
+      .map((it) => it.service?.displayName ?? 'Service')
+      .where((s) => s.trim().isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+
+  final itemsCount =
+      _toInt(json['items_count']) ?? items.length;
+
+  // ==========================================================
+  // RETURN MODEL
+  // ==========================================================
+
+  return VendorOrderModel(
+    id: id, 
+    status: status,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    subtotal: subtotal,
+    deliveryFee: deliveryFee,
+    serviceFee: serviceFee,
+    discount: discount,
+    shopId: shopId,
+    acceptedShop: acceptedShop,
+    customer: customer,
+    itemsCount: itemsCount,
+    services: services,
+    items: items,
+  );
+}
 
   String get idLabel => '#$id';
 
