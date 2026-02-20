@@ -93,30 +93,64 @@ class OrderAcceptanceScreen extends ConsumerWidget {
       data: (order) {
         if (order.status != 'published') return const SizedBox.shrink();
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: SizedBox(
-              height: 56,
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Row(
+            children: [
+              /// 🔴 REJECT (Subtle destructive style)
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: const Color.fromARGB(255, 238, 208, 207),
+                        width: 1.2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    onPressed: () => _rejectOrder(context, ref, order),
+                    child: Text(
+                      'REJECT',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.red.shade600,
+                      ),
+                    ),
                   ),
                 ),
+              ),
 
-                /// 🔹 Only attribute adjusted
-                onPressed: () => _acceptOrder(context, ref, order),
+              const SizedBox(width: 12),
 
-                child: const Text(
-                  'ACCEPT ORDER',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+              /// 🟢 ACCEPT (UNCHANGED GLOBAL STYLE)
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    onPressed: () => _acceptOrder(context, ref, order),
+                    child: const Text(
+                      'ACCEPT ORDER',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        );
+        ),
+      );
+      
+      
+      
       },
     ),
 
@@ -208,7 +242,110 @@ class OrderAcceptanceScreen extends ConsumerWidget {
     }
   }
   
+  Future<void> _rejectOrder(
+    BuildContext context,
+    WidgetRef ref,
+    VendorOrderModel order,
+  ) async {
+    final rootNav = Navigator.of(context, rootNavigator: true);
+
+    /// 🔹 Confirmation 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Reject order'),
+        content: const Text(
+          'Are you sure you want to reject this order?',
+        ),
+        actions: [
+          /// CANCEL
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCEL'),
+          ),
+
+          /// LIGHT REJECT (Outlined style)
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(
+                color: Color.fromARGB(255, 238, 208, 207), // light red border
+                width: 1.2,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 10,
+              ),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'REJECT',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: Colors.red.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    /// 🔹 Loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _AcceptOrderLoadingDialog(),
+    );
+
+    try {
+      final repo = ref.read(vendorOrderRepositoryProvider);
+
+      await repo.rejectOrder(
+        vendorId: vendorId,
+        shopId: shopId,
+        broadcastId: broadcastId,
+      );
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order rejected')),
+      );
+
+      /// Refresh provider
+      ref.invalidate(
+        vendorOrderAcceptanceProvider(
+          (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!context.mounted) return;
+
+      context.go('/v/home');
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e')),
+      );
+    } finally {
+      if (context.mounted && rootNav.canPop()) {
+        rootNav.pop();
+      }
+    }
+  }
 }
+
+
+
 
 class _CustomerCard extends StatelessWidget {
   const _CustomerCard({required this.order});
@@ -519,7 +656,11 @@ Color? _statusColor(String raw) {
 }
 
 class _AcceptOrderLoadingDialog extends StatelessWidget {
-  const _AcceptOrderLoadingDialog();
+  const _AcceptOrderLoadingDialog({
+    this.message = 'Processing...',
+  });
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -529,19 +670,22 @@ class _AcceptOrderLoadingDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+        padding: const EdgeInsets.symmetric(
+          vertical: 28,
+          horizontal: 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            SizedBox(
+          children: [
+            const SizedBox(
               width: 42,
               height: 42,
               child: CircularProgressIndicator(strokeWidth: 3),
             ),
-            SizedBox(height: 18),
+            const SizedBox(height: 18),
             Text(
-              'Accepting order...',
-              style: TextStyle(
+              message,
+              style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 14.5,
               ),

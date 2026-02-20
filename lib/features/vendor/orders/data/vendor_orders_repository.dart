@@ -380,6 +380,28 @@ class VendorOrderRepository {
         throw VendorOrderRepositoryException(e.toString());
       }
     }
+
+    Future<void> rejectOrder({
+      required int vendorId,
+      required int shopId,
+      required int broadcastId,
+    }) async {
+      try {
+        final endpoint =
+            '/api/v1/vendors/$vendorId/shops/$shopId/order-broadcasts/$broadcastId/reject';
+
+        final res = await _api.dio.post(endpoint);
+
+        // Optional: log server response
+         print(res.data);
+
+        return;
+      } on DioException catch (e) {
+        throw VendorOrderRepositoryException(_dioMessage(e));
+      } catch (e) {
+        throw VendorOrderRepositoryException(e.toString());
+      }
+    }
 }
 
 // ----------------------------
