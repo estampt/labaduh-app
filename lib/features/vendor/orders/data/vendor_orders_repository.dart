@@ -64,7 +64,7 @@ class VendorOrderRepository {
   }
 
 
-   Future<List<VendorOrderModel>?> getOrderByBroadcastId({
+  Future<List<VendorOrderModel>?> getOrderByBroadcastId({
     required int broadcastId,    
     required int vendorId,
     required int shopId,
@@ -359,7 +359,27 @@ class VendorOrderRepository {
     return false;
   }
 
-  Future<void> acceptOrder({required int vendorId, required int shopId, required int orderId}) async {}
+  Future<void> acceptOrder({
+      required int vendorId,
+      required int shopId,
+      required int broadcastId,
+    }) async {
+      try {
+        final endpoint =
+            '/api/v1/vendors/$vendorId/shops/$shopId/order-broadcasts/$broadcastId/accept';
+
+        final res = await _api.dio.post(endpoint);
+
+        // Optional: log server response
+         print(res.data);
+
+        return;
+      } on DioException catch (e) {
+        throw VendorOrderRepositoryException(_dioMessage(e));
+      } catch (e) {
+        throw VendorOrderRepositoryException(e.toString());
+      }
+    }
 }
 
 // ----------------------------

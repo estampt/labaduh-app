@@ -72,10 +72,6 @@ factory VendorOrderModel.fromJson(Map<String, dynamic> json) {
       ? (json['order'] as Map).cast<String, dynamic>()
       : const <String, dynamic>{};
 
-  final broadcastObj = (json['broadcast'] is Map)
-      ? (json['broadcast'] as Map).cast<String, dynamic>()
-      : const <String, dynamic>{};
-
   // ==========================================================
   // IDS
   // ==========================================================
@@ -84,11 +80,7 @@ factory VendorOrderModel.fromJson(Map<String, dynamic> json) {
       _toInt(json['id']) ??
       _toInt(json['order_id']) ??
       _toInt(orderObj['order_id']) ??
-      0;
-
-  final broadcastId =
-      _toInt(json['broadcast_id']) ??
-      _toInt(broadcastObj['broadcast_id']);
+      0; 
 
   // ==========================================================
   // STATUS
@@ -98,9 +90,7 @@ factory VendorOrderModel.fromJson(Map<String, dynamic> json) {
       (json['status'] as String?) ??
       (orderObj['status'] as String?) ??
       'unknown';
-
-  final broadcastStatus =
-      (broadcastObj['status'] as String?) ?? 'unknown';
+ 
 
   // ==========================================================
   // DATES

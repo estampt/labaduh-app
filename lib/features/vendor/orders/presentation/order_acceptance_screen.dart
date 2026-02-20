@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart'; 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:labaduh/features/vendor/orders/state/vendor_orders_provider.dart'; 
 import '../model/vendor_order_model.dart';
 
@@ -85,64 +86,128 @@ class OrderAcceptanceScreen extends ConsumerWidget {
           },
         ),
       ),
-      bottomNavigationBar: asyncOrder.when(
-        loading: () => const SizedBox.shrink(),
-        error: (_, __) => const SizedBox.shrink(),
-        data: (order) {
-          if (order.status != 'published') return const SizedBox.shrink();
 
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              child: SizedBox(
-                height: 56,
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      bottomNavigationBar: asyncOrder.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (order) {
+        if (order.status != 'published') return const SizedBox.shrink();
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: SizedBox(
+              height: 56,
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  onPressed: () => _acceptOrder(context, ref, order),
-                  child: const Text(
-                    'ACCEPT ORDER',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
+                ),
+
+                /// 🔹 Only attribute adjusted
+                onPressed: () => _acceptOrder(context, ref, order),
+
+                child: const Text(
+                  'ACCEPT ORDER',
+                  style: TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
+    ),
+
+      
     );
   }
 
-  Future<void> _acceptOrder(BuildContext context, WidgetRef ref, VendorOrderModel order) async {
+  Future<void> _acceptOrder(
+    BuildContext context,
+    WidgetRef ref,
+    VendorOrderModel order,
+  ) async {
+    final rootNav = Navigator.of(context, rootNavigator: true);
+
+    // ✅ 1) Ask for confirmation FIRST
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm acceptance'),
+        content: const Text('Do you want to accept this order?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('ACCEPT'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    bool loadingShown = false;
+
+    // ✅ 2) Show loading AFTER confirmation
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _AcceptOrderLoadingDialog(),
+    );
+    loadingShown = true;
+
     try {
       final repo = ref.read(vendorOrderRepositoryProvider);
 
       await repo.acceptOrder(
         vendorId: vendorId,
         shopId: shopId,
-        orderId: order.id,
+        broadcastId: broadcastId,
       );
 
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order accepted successfully')),
-      );
+      final success = true;
+      final message = 'Order accepted successfully';
 
-      ref.invalidate(
-        vendorOrderAcceptanceProvider(
-          (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
-        ),
-      );
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+
+        ref.invalidate(
+          vendorOrderAcceptanceProvider(
+            (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (!context.mounted) return;
+
+        context.go('/v/home');
+      }
     } catch (e) {
       if (!context.mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed: $e')),
       );
+    } finally {
+      // ✅ Always dismiss loading if it was shown
+      if (loadingShown && context.mounted && rootNav.canPop()) {
+        rootNav.pop();
+      }
     }
   }
+  
 }
 
 class _CustomerCard extends StatelessWidget {
@@ -452,3 +517,39 @@ Color? _statusColor(String raw) {
       return null;
   }
 }
+
+class _AcceptOrderLoadingDialog extends StatelessWidget {
+  const _AcceptOrderLoadingDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            SizedBox(
+              width: 42,
+              height: 42,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            SizedBox(height: 18),
+            Text(
+              'Accepting order...',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
