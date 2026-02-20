@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../features/customer/order/models/latest_orders_models.dart';
+import 'package:labaduh/features/customer/order/models/customer_order_model.dart';
+ 
 
 // ✅ Change this import to wherever your apiClientProvider lives in your project.
 import '../../../core/network/api_client.dart';
 
 class OrderMessagesScreen extends ConsumerStatefulWidget {
-  final LatestOrder? order;
+  final CustomerOrder? order;
 
   /// Optional: if you later add route /messages/orders/:orderId
   final String? orderId;

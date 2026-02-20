@@ -7,8 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:labaduh/core/utils/submit_loading_provider.dart';
 
 import '../state/vendor_orders_provider.dart';
-import '../model/vendor_order_model.dart';
-import '../data/vendor_orders_repository.dart';
+import '../model/vendor_order_model.dart'; 
 import 'package:labaduh/core/utils/order_status_utils.dart';
 import '../../../../core/auth/session_notifier.dart';
 

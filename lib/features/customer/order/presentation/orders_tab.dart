@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-
-import '../models/latest_orders_models.dart';
+import 'package:labaduh/features/customer/order/models/customer_order_model.dart'; 
 import '../state/latest_orders_provider.dart';
 import '../data/customer_orders_api.dart';
 import '../../../../core/network/api_client.dart';
@@ -57,7 +56,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
     return num.tryParse(v.toString()) ?? 0;
   }
 
-  num _computeOrderTotal(LatestOrder o) {
+  num _computeOrderTotal(CustomerOrder o) {
     // New response: "total" is canonical
     final total = _num(o.total);
     if (total > 0) return total;
@@ -415,7 +414,7 @@ class _OrderDashboardCard extends StatelessWidget {
     super.key,
   });
 
-  final LatestOrder order;
+  final CustomerOrder order;
   final num total;
   final int stepIndex;
   final VoidCallback onOpenDetails;
@@ -424,9 +423,9 @@ class _OrderDashboardCard extends StatelessWidget {
   final VoidCallback? onCancelOrder;
   final VoidCallback? onWeightReview;
 
-  String _serviceLabel(LatestOrderItem it) => it.service?.name ?? 'Service #${it.serviceId}';
+  String _serviceLabel(CustomerOrderItem it) => it.service?.name ?? 'Service #${it.serviceId}';
 
-  String _optionLabel(LatestOrderItemOption o) {
+  String _optionLabel(CustomerOrderItemOption o) {
     // Prefer nested service_option.name, fallback to name, then id.
     final n = (o.serviceOption?.name ?? o.name ?? '').trim();
     if (n.isNotEmpty) return n;
@@ -443,7 +442,7 @@ class _OrderDashboardCard extends StatelessWidget {
   }
 
   /// Subtotal: sum of item prices + option prices (no fees/discounts).
-  num _computeSubtotal(LatestOrder o) {
+  num _computeSubtotal(CustomerOrder o) {
     num sum = 0;
     for (final it in o.items) {
       sum += _num(it.displayPrice);
@@ -455,7 +454,7 @@ class _OrderDashboardCard extends StatelessWidget {
   }
 
   /// Try-read common fee fields safely (won't crash if field doesn't exist).
-  num _readDeliveryFee(LatestOrder o) {
+  num _readDeliveryFee(CustomerOrder o) {
     final d = o as dynamic;
     try { final v = d.deliveryFee; return _num(v); } catch (_) {}
     try { final v = d.delivery_fee; return _num(v); } catch (_) {}
@@ -463,7 +462,7 @@ class _OrderDashboardCard extends StatelessWidget {
     return 0;
   }
 
-  num _readServiceFee(LatestOrder o) {
+  num _readServiceFee(CustomerOrder o) {
     final d = o as dynamic;
     try { final v = d.serviceFee; return _num(v); } catch (_) {}
     try { final v = d.service_fee; return _num(v); } catch (_) {}
@@ -472,7 +471,7 @@ class _OrderDashboardCard extends StatelessWidget {
     return 0;
   }
 
-  num _readDiscount(LatestOrder o) {
+  num _readDiscount(CustomerOrder o) {
     final d = o as dynamic;
     try { final v = d.discount; return _num(v); } catch (_) {}
     try { final v = d.discountAmount; return _num(v); } catch (_) {}

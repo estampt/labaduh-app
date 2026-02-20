@@ -1,17 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../state/latest_orders_provider.dart';
-import '../../../../core/network/api_client.dart';
+import 'package:labaduh/core/network/api_client.dart'; 
+import 'package:labaduh/features/customer/order/models/customer_order_model.dart';
 
-/// ===== Weight Review Page =====
-/// Called when order status is `weight_reviewed`.
-/// - Shows actual/proposed weight + photos
-/// - Customer can accept weight (moves order to `weight_accepted`)
-/// - After success: refresh orders list, then return to Orders tab
+import '../data/customer_orders_api.dart';
+
 class WeightReviewScreen extends ConsumerStatefulWidget {
   final int orderId;
 
@@ -25,306 +19,291 @@ class WeightReviewScreen extends ConsumerStatefulWidget {
 }
 
 class _WeightReviewScreenState extends ConsumerState<WeightReviewScreen> {
-  late final Future<Map<String, dynamic>?> _orderFuture;
-
+  late Future<CustomerOrder?> _future;
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _orderFuture = _fetchOrder();
+    _future = _fetchOrder();
   }
 
-  Future<Map<String, dynamic>?> _fetchOrder() async {
+  Future<CustomerOrder?> _fetchOrder() async {
     try {
       final client = ref.read(apiClientProvider);
-      final res = await client.dio.get('/api/v1/customer/orders/${widget.orderId}');
-      final data = (res.data as Map?)?['data'];
-      return data is Map ? Map<String, dynamic>.from(data as Map) : null;
-    } catch (_) {
+      final api = CustomerOrdersApi(client.dio);
+
+      final res = await api.getOrderById(
+        orderId: widget.orderId,
+        category: 'weight_review',
+      );
+
+      return res.data.isNotEmpty ? res.data.first : null;
+    } catch (e) {
+      debugPrint('❌ getOrderById failed: $e');
       return null;
     }
   }
 
+  // ---------------- helpers ----------------
   double _toDouble(dynamic v) {
     if (v == null) return 0;
     if (v is num) return v.toDouble();
-    final s = v.toString().trim();
-    if (s.isEmpty) return 0;
-    final cleaned = s.replaceAll(RegExp(r'[^0-9.\-]'), '');
-    return double.tryParse(cleaned) ?? 0;
+    return double.tryParse(v.toString()) ?? 0;
   }
 
-  String _formatKg(dynamic v) {
-    final d = _toDouble(v);
-    if (d <= 0) return '-';
-    // show 1 decimal (e.g. 7.2 kg)
-    return '${d.toStringAsFixed(1)} kg';
+  String _money(CustomerOrder o, dynamic amount) {
+    final code = o.currencyCode.trim();
+    final v = _toDouble(amount);
+    return '$code ${v.toStringAsFixed(2)}';
   }
 
-  /// Tries multiple common keys to find the reviewed weight.
-  /// Adjust to match your backend payload if needed.
-  double _reviewedWeightKg(Map<String, dynamic> data) {
-    final candidates = [
-      data['actual_weight_kg'],
-      data['actual_weight'],
-      data['reviewed_weight_kg'],
-      data['reviewed_weight'],
-      data['weight_kg'],
-      data['weight'],
-      data['actual_weight_value'],
-    ];
+  String _dateShort(String iso) {
+    if (iso.isEmpty) return '-';
+    final s = iso.replaceAll('T', ' ');
+    return s.length >= 16 ? s.substring(0, 16) : s;
+  }
 
-    for (final c in candidates) {
-      final d = _toDouble(c);
-      if (d > 0) return d;
+  String _qtyLabel(CustomerOrderItem item) {
+    final uom = (item.uom ?? '').trim();
+    final v = item.qtyActual ?? item.qtyEstimated ?? item.qty;
+    final numVal = _toDouble(v);
+    if (uom.isEmpty) return numVal.toStringAsFixed(1);
+    return '${numVal.toStringAsFixed(1)} ${uom.toUpperCase()}';
+  }
+
+  String _itemPriceLabel(CustomerOrder o, CustomerOrderItem item) {
+    final v = _toDouble(item.displayPrice);
+    return _money(o, v);
+  }
+
+  String _optionPriceLabel(CustomerOrder o, CustomerOrderItemOption op) {
+    final v = _toDouble(op.displayPrice);
+    return _money(o, v);
+  }
+
+  List<String> _photoUrls(CustomerOrder order) {
+    return order.mediaAttachments
+        .where((m) =>
+            (m.category ?? '').toLowerCase() == 'weight_review' &&
+            (m.url ?? '').trim().isNotEmpty)
+        .map((m) => m.url!.trim())
+        .toList();
+  }
+
+  void _openImageViewer(String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(14),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Center(child: Text('Failed to load image')),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return const Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _photoStrip(List<String> urls) {
+    if (urls.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: const Text('No photos attached.'),
+      );
     }
-    return 0;
+
+    return SizedBox(
+      height: 84,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: urls.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final url = urls[i];
+          return InkWell(
+            onTap: () => _openImageViewer(url),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.black12,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.broken_image_outlined),
+                  ),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: Colors.black12,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
-  /// Tries multiple common keys for photos list.
-  /// Accepts: List<String>, or List<Map> with url fields.
-  List<String> _weightPhotoUrls(Map<String, dynamic> data) {
-    final rawCandidates = [
-      data['weight_photos'],
-      data['weight_photo_urls'],
-      data['actual_weight_photos'],
-      data['actual_weight_photo_urls'],
-      data['photos'], // fallback, if you reuse generic photos
-    ];
-
-    dynamic raw;
-    for (final c in rawCandidates) {
-      if (c != null) {
-        raw = c;
-        break;
-      }
-    }
-
-    if (raw is! List) return const [];
-
-    final urls = <String>[];
-    for (final e in raw) {
-      if (e is String && e.trim().isNotEmpty) {
-        urls.add(e.trim());
-        continue;
-      }
-      if (e is Map) {
-        final m = Map<String, dynamic>.from(e);
-        final u = (m['url'] ?? m['photo_url'] ?? m['image_url'] ?? m['path'])?.toString();
-        if (u != null && u.trim().isNotEmpty) urls.add(u.trim());
-      }
-    }
-
-    return urls;
-  }
-
-  Future<void> _acceptWeight(Map<String, dynamic> order) async {
+  Future<void> _confirmWeight(CustomerOrder order) async {
     if (_submitting) return;
 
-    final status = (order['status'] ?? '').toString().toLowerCase();
+    // ✅ 1) Confirm dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm acceptance'),
+        content: const Text('Do you want to accept this order?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('ACCEPT'),
+          ),
+        ],
+      ),
+    );
 
-    // Optional guard (keep it gentle)
-    if (status.isNotEmpty && status != 'weight_reviewed') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('This order is not ready for weight review (status: $status).')),
-      );
-      return;
-    }
+    if (confirmed != true) return;
 
     setState(() => _submitting = true);
 
+    // ✅ 2) Loading dialog (blocking)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: SizedBox(
+          height: 70,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Confirming weight...',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
     try {
       final client = ref.read(apiClientProvider);
+      final api = CustomerOrdersApi(client.dio);
 
-      // ✅ Adjust this endpoint to match your backend route
-      // Suggested: POST /api/v1/customer/orders/{order}/approve-final
-      await client.dio.post('/api/v1/customer/orders/${widget.orderId}/approve-final');
-
-      if (!mounted) return;
-
-      // Refresh list so Orders tab updates immediately
-      try {
-        await ref.read(latestOrdersProvider.notifier).refresh();
-      } catch (_) {}
+      // ✅ 3) Call API via CustomerOrdersApi
+      await api.weightAccepted(widget.orderId);
 
       if (!mounted) return;
+
+      // ✅ close loading dialog
+      Navigator.of(context).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Weight accepted successfully.')),
+        const SnackBar(content: Text('Weight confirmed.')),
       );
 
-      // ✅ Return to Orders tab
-      if (context.canPop()) {
-        Navigator.of(context).pop(true); // return a "success" flag if you want
-      } else {
-        context.go('/c/orders');
-      }
+      Navigator.of(context).pop(true);
     } catch (e) {
+      debugPrint('❌ confirmWeight failed: $e');
       if (!mounted) return;
+
+      // ✅ close loading dialog
+      Navigator.of(context).pop();
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to accept weight: $e')),
+        SnackBar(content: Text('Failed: $e')),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openImageViewer(String url) {
-    showDialog(
-      context: context,
-      builder: (_) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(14),
-          child: Stack(
-            children: [
-              InteractiveViewer(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Text('Failed to load image'),
-                    ),
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return const Center(
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _photoGrid(List<String> urls) {
-    if (urls.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.black12),
-        ),
-        child: const Text('No photos provided.'),
-      );
-    }
-
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      shrinkWrap: true,
-      itemCount: urls.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-      ),
-      itemBuilder: (context, index) {
-        final url = urls[index];
-        return InkWell(
-          onTap: () => _openImageViewer(url),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: Colors.black12,
-                alignment: Alignment.center,
-                child: const Icon(Icons.broken_image_outlined),
-              ),
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return Container(
-                  color: Colors.black12,
-                  alignment: Alignment.center,
-                  child: const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    const radius = 18.0;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF3F4F8),
       appBar: AppBar(
         title: const Text('Weight Review'),
+        backgroundColor: const Color(0xFFF3F4F8),
+        elevation: 0,
       ),
       body: SafeArea(
-        child: FutureBuilder<Map<String, dynamic>?>(
-          future: _orderFuture,
+        child: FutureBuilder<CustomerOrder?>(
+          future: _future,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final data = snap.data;
-            if (data == null) {
+            final order = snap.data;
+            if (order == null) {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Unable to load order details.'),
+                      const Text('Unable to load order.'),
                       const SizedBox(height: 10),
                       OutlinedButton(
-                        onPressed: () => setState(() {
-                          _orderFuture = _fetchOrder();
-                        }),
+                        onPressed: () => setState(() => _future = _fetchOrder()),
                         child: const Text('Retry'),
                       ),
                     ],
@@ -333,113 +312,241 @@ class _WeightReviewScreenState extends ConsumerState<WeightReviewScreen> {
               );
             }
 
-            final reviewedKg = _reviewedWeightKg(data);
-            final photoUrls = _weightPhotoUrls(data);
+            final shop = order.partner;
+            final shopName = (shop?.name ?? 'Laundry Partner').trim();
+            final rating = shop?.avgRating;
+            final reviews = shop?.ratingsCount;
+            final dist = shop?.distanceKm;
 
-            // Vendor / shop name (same approach as your feedback page)
-            final shopRaw = (data['vendor_shop'] as Map?) ??
-                (data['accepted_shop'] as Map?) ??
-                (data['shop'] as Map?);
-            final shop = shopRaw == null ? null : Map<String, dynamic>.from(shopRaw);
-            final shopName = shop?['name']?.toString();
+            final created = _dateShort(order.createdAt);
+            final notes = (order.notes ?? '').trim();
+            final photos = _photoUrls(order);
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
               children: [
-                // ---------- HEADER CARD ----------
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                    color: Colors.white,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Order #${data['id'] ?? widget.orderId}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        shopName?.isNotEmpty == true ? shopName! : 'Vendor',
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _infoRow('Status', (data['status'] ?? '-').toString()),
-                    ],
+                // ============================================================
+                // PARTNER CARD
+                // ============================================================
+                _RoundedCard(
+                  radius: radius,
+                  child: ListTile(
+                    dense: true,
+                    leading: const CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Colors.black12,
+                      child: Icon(Icons.local_laundry_service, color: Colors.black54),
+                    ),
+                    title: Text(
+                      shopName,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      '⭐ ${rating?.toStringAsFixed(1) ?? '-'} • ${reviews ?? 0} reviews • ${dist?.toStringAsFixed(2) ?? '-'} km away',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    onTap: () {},
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
 
-                // ---------- WEIGHT DETAILS CARD ----------
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                    color: Colors.white,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Reviewed Weight',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
+                // ============================================================
+                // ITEMS CARD
+                // ============================================================
+                _RoundedCard(
+                  radius: radius,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      initiallyExpanded: false,
+                      tilePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Order #${order.id}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 17,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _money(order, order.totalAmount),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      _infoRow('Actual Weight', reviewedKg > 0 ? '${reviewedKg.toStringAsFixed(1)} kg' : '-'),
-                      // Optional fields (if your backend has them)
-                      if ((data['estimated_weight'] ?? data['estimated_weight_kg']) != null)
-                        _infoRow('Estimated Weight', _formatKg(data['estimated_weight'] ?? data['estimated_weight_kg'])),
-
-                      if (data['weight_note'] != null && data['weight_note'].toString().trim().isNotEmpty)
-                        _infoRow('Vendor Note', data['weight_note'].toString().trim()),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // ---------- PHOTOS ----------
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                    color: Colors.white,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Weight Photos',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Order placed',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
+                            ),
+                            Text(
+                              created,
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      _photoGrid(photoUrls),
-                      if (photoUrls.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Divider(height: 1, color: Colors.grey.withOpacity(0.25)),
+                        const SizedBox(height: 12),
+
+                        ...order.items.map((item) {
+                          final title =
+                              (item.service?.name ?? item.serviceId.toString()).trim();
+                          final qty = _qtyLabel(item);
+                          final price = _itemPriceLabel(order, item);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: const TextStyle(fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                    Text(
+                                      price,
+                                      style: const TextStyle(fontWeight: FontWeight.w900),
+                                    ),
+                                  ],
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Qty: $qty',
+                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                  ),
+                                ),
+
+                                if (item.options.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Add-ons',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.black54,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ...item.options.map((op) {
+                                    final name = (op.displayName ?? 'Option').trim();
+                                    final req = (op.isRequired == true) ? ' (required)' : '';
+                                    final opPrice = _optionPriceLabel(order, op);
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              '$name$req',
+                                              style: const TextStyle(fontWeight: FontWeight.w700),
+                                            ),
+                                          ),
+                                          Text(
+                                            opPrice,
+                                            style: const TextStyle(fontWeight: FontWeight.w800),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ],
+                            ),
+                          );
+                        }),
+
+                        const Divider(height: 22),
+
+                        _AmountRow(label: 'Subtotal', valueText: _money(order, order.subtotalAmount)),
+                        _AmountRow(label: 'Delivery Fee', valueText: _money(order, order.deliveryFeeAmount)),
+                        _AmountRow(label: 'Service Fee', valueText: _money(order, order.serviceFeeAmount)),
+                        _AmountRow(label: 'Discount', valueText: _money(order, -order.discountAmount)),
+
+                        const SizedBox(height: 6),
+                        Divider(height: 1, color: Colors.grey.withOpacity(0.25)),
                         const SizedBox(height: 10),
-                        Text(
-                          'Tap any photo to zoom.',
-                          style: TextStyle(color: Colors.grey[700], fontSize: 12),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total', style: TextStyle(fontWeight: FontWeight.w900)),
+                            Text(_money(order, order.totalAmount),
+                                style: const TextStyle(fontWeight: FontWeight.w900)),
+                          ],
                         ),
                       ],
-                    ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ============================================================
+                // ✅ PHOTOS OUTSIDE THE ITEMS CARD
+                // ============================================================
+                _RoundedCard(
+                  radius: radius,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Attached Photos',
+                            style: TextStyle(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 10),
+                        _photoStrip(photos),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ============================================================
+                // ✅ NOTES OUTSIDE THE ITEMS CARD
+                // ============================================================
+                _RoundedCard(
+                  radius: radius,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Notes', style: TextStyle(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 10),
+                        Text(
+                          notes.isEmpty ? 'No notes.' : notes,
+                          style: TextStyle(
+                            color: notes.isEmpty ? Colors.black54 : Colors.black87,
+                            height: 1.35,
+                            fontWeight: notes.isEmpty ? FontWeight.w600 : FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -448,50 +555,104 @@ class _WeightReviewScreenState extends ConsumerState<WeightReviewScreen> {
         ),
       ),
 
-      // ---------- BOTTOM ACTIONS ----------
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          child: FutureBuilder<Map<String, dynamic>?>(
-            future: _orderFuture,
-            builder: (context, snap) {
-              final data = snap.data;
-              final canAccept = !_submitting && (data != null);
+          child: FutureBuilder<CustomerOrder?>(
+            future: _future,
+            builder: (_, snap) {
+              final order = snap.data;
+              final disabled = _submitting || order == null;
 
-              return Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _submitting
-                          ? null
-                          : () {
-                              if (context.canPop()) {
-                                Navigator.of(context).pop(false);
-                              } else {
-                                context.go('/c/orders');
-                              }
-                            },
-                      child: const Text('Back'),
+              return SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: disabled ? null : () => _confirmWeight(order!),
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
                     ),
+                    elevation: 0,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: canAccept ? () => _acceptWeight(data!) : null,
-                      child: _submitting
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Accept Weight'),
-                    ),
-                  ),
-                ],
+                  child: _submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Confirm Weight',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                ),
               );
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Shared Widgets
+// ============================================================
+
+class _RoundedCard extends StatelessWidget {
+  const _RoundedCard({
+    required this.radius,
+    required this.child,
+  });
+
+  final double radius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: BorderSide(color: Colors.black.withOpacity(0.08)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _AmountRow extends StatelessWidget {
+  const _AmountRow({
+    required this.label,
+    required this.valueText,
+  });
+
+  final String label;
+  final String valueText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            valueText,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }

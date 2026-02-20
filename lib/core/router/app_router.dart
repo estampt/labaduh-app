@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:labaduh/features/common/presentation/messages_screen.dart';
+import 'package:labaduh/features/customer/order/models/customer_order_model.dart';
 
 import '../auth/session_notifier.dart';
 
@@ -10,8 +11,7 @@ import 'auth_signup_routes.dart';
 import 'vendor_approval_routes.dart';
 import 'vendor_shell_routes.dart';
 import 'vendor_profile_routes.dart';
-
-import '../../features/customer/order/models/latest_orders_models.dart';
+ 
 import '../../features/auth/presentation/otp_verify_screen.dart';
 import '../../features/onboarding/presentation/landing_screen.dart';
 import '../../features/onboarding/presentation/role_select_screen.dart';
@@ -81,7 +81,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         path: '/messages/orders',
         builder: (context, state) {
-          final order = state.extra as LatestOrder?;
+          final order = state.extra as CustomerOrder?;
           return OrderMessagesScreen(order: order);
         },
       ),

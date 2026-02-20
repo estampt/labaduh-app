@@ -1,26 +1,27 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:labaduh/features/customer/order/models/customer_order_model.dart';
 
 import '../models/discovery_service_models.dart';
 import '../models/order_models.dart';
-import '../models/order_payloads.dart';
-import '../models/latest_orders_models.dart';
+import '../models/order_payloads.dart'; 
+
 import 'package:image_picker/image_picker.dart';
 
 class CustomerOrdersApi {
   final Dio dio;
   CustomerOrdersApi(this.dio);
 
-  Future<LatestOrdersResponse> latestOrders({String? cursor}) async {
+  Future<CustomerOrders> latestOrders({String? cursor}) async {
     final res = await dio.get(
       '/api/v1/customer/orders/getorders',
       queryParameters: cursor == null ? null : {'cursor': cursor},
     );
 
-    return LatestOrdersResponse.fromJson(Map<String, dynamic>.from(res.data));
+    return CustomerOrders.fromJson(Map<String, dynamic>.from(res.data));
   }
   
-  Future<LatestOrdersResponse> getOrderById({
+  Future<CustomerOrders> getOrderById({
       required int orderId,
       String? category, // weight_review, delivery_proof, etc.
     }) async {
@@ -31,7 +32,7 @@ class CustomerOrdersApi {
         },
       );
 
-      return LatestOrdersResponse.fromJson(
+      return CustomerOrders.fromJson(
         Map<String, dynamic>.from(res.data),
       );
   }
@@ -39,7 +40,7 @@ class CustomerOrdersApi {
   
   /// Generic orders list (e.g. history)
   /// Example: /api/v1/customer/orders?status=completed
-  Future<LatestOrdersResponse> listOrders({String? status, String? cursor}) async {
+  Future<CustomerOrders> listOrders({String? status, String? cursor}) async {
     final res = await dio.get(
       '/api/v1/customer/orders',
       queryParameters: {
@@ -47,7 +48,7 @@ class CustomerOrdersApi {
         if (cursor != null) 'cursor': cursor,
       },
     );
-    return LatestOrdersResponse.fromJson(Map<String, dynamic>.from(res.data));
+    return CustomerOrders.fromJson(Map<String, dynamic>.from(res.data));
   }
 
   Future<List<DiscoveryServiceRow>> discoveryServices({

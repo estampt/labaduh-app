@@ -1,26 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../models/latest_orders_models.dart';
+import 'package:labaduh/features/customer/order/models/customer_order_model.dart';
+ 
 import 'order_providers.dart';
 
 /// Holds current list + cursor
-class LatestOrdersState {
-  final List<LatestOrder> orders;
+class CustomerOrderState {
+  final List<CustomerOrder> orders;
   final String? cursor;
   final bool isLoadingMore;
 
-  const LatestOrdersState({
+  const CustomerOrderState({
     required this.orders,
     required this.cursor,
     required this.isLoadingMore,
   });
 
-  LatestOrdersState copyWith({
-    List<LatestOrder>? orders,
+  CustomerOrderState copyWith({
+    List<CustomerOrder>? orders,
     String? cursor,
     bool? isLoadingMore,
   }) {
-    return LatestOrdersState(
+    return CustomerOrderState(
       orders: orders ?? this.orders,
       cursor: cursor ?? this.cursor,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
@@ -28,12 +28,12 @@ class LatestOrdersState {
   }
 }
 
-class LatestOrdersController extends AsyncNotifier<LatestOrdersState> {
+class LatestOrdersController extends AsyncNotifier<CustomerOrderState> {
   @override
-  Future<LatestOrdersState> build() async {
+  Future<CustomerOrderState> build() async {
     final api = ref.read(customerOrdersApiProvider);
     final res = await api.latestOrders();
-    return LatestOrdersState(
+    return CustomerOrderState(
       orders: res.data,
       cursor: res.cursor,
       isLoadingMore: false,
@@ -45,7 +45,7 @@ class LatestOrdersController extends AsyncNotifier<LatestOrdersState> {
     state = await AsyncValue.guard(() async {
       final api = ref.read(customerOrdersApiProvider);
       final res = await api.latestOrders();
-      return LatestOrdersState(
+      return CustomerOrderState(
         orders: res.data,
         cursor: res.cursor,
         isLoadingMore: false,
@@ -69,7 +69,7 @@ class LatestOrdersController extends AsyncNotifier<LatestOrdersState> {
       // append
       final merged = [...current.orders, ...res.data];
       state = AsyncValue.data(
-        LatestOrdersState(
+        CustomerOrderState(
           orders: merged,
           cursor: res.cursor,
           isLoadingMore: false,
@@ -84,12 +84,12 @@ class LatestOrdersController extends AsyncNotifier<LatestOrdersState> {
 }
 
 final latestOrdersProvider =
-    AsyncNotifierProvider<LatestOrdersController, LatestOrdersState>(
+    AsyncNotifierProvider<LatestOrdersController, CustomerOrderState>(
         LatestOrdersController.new);
 
 
 /// Completed orders (history) - fetched once on demand (no polling).
-final completedOrdersProvider = FutureProvider.autoDispose<List<LatestOrder>>((ref) async {
+final completedOrdersProvider = FutureProvider.autoDispose<List<CustomerOrder>>((ref) async {
   final api = ref.read(customerOrdersApiProvider);
   final res = await api.listOrders(status: 'closed');
   return res.data;
