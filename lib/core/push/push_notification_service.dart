@@ -70,31 +70,105 @@ class PushNotificationService {
   }
 
   void _handleTap(Map<String, dynamic> data) {
-    final route = data['route']?.toString();
+    print('🔔 Notification tapped');
 
+    // --------------------------------------------
+    // RAW PAYLOAD
+    // --------------------------------------------
+    print('📦 Full payload: $data');
+
+    final route = data['route']?.toString();
+    print('➡️ Route from payload: $route');
+
+    // --------------------------------------------
+    // DIRECT ROUTE HANDLING
+    // --------------------------------------------
     if (route != null && route.startsWith('/')) {
-      _router.go(route);
+      print('🚀 Navigating via route: $route');
+
+      try {
+        _router.go(route);
+        print('✅ Navigation success via route');
+      } catch (e) {
+        print('❌ Navigation error: $e');
+      }
+
       return;
     }
 
-    // Fallback mappings
-    final type = data['type'];
+    // --------------------------------------------
+    // TYPE CHECK
+    // --------------------------------------------
+    final type = data['type']?.toString();
+    print('🧩 Notification type: $type');
 
+    // --------------------------------------------
+    // ORDER BROADCAST HANDLING
+    // --------------------------------------------
+    if (type == 'order_broadcast') {
+      final raw = data['broadcast_id'] ?? data['order_broadcast_id'];
+
+      print('🆔 Raw broadcast id: $raw');
+
+      final broadcastId =
+          int.tryParse(raw?.toString() ?? '') ?? 0;
+
+      print('🔢 Parsed broadcast id: $broadcastId');
+
+      if (broadcastId > 0) {
+        final targetRoute = '/v/home/$broadcastId';
+
+        print('🚀 Navigating to: $targetRoute');
+
+        try {
+          _router.go(targetRoute);
+          print('✅ Navigation success');
+        } catch (e) {
+          print('❌ Navigation error: $e');
+        }
+
+        return;
+      } else {
+        print('⚠️ Invalid broadcast id');
+      }
+    }
+
+    // --------------------------------------------
+    // JOB OFFER
+    // --------------------------------------------
     if (type == 'job_offer') {
+      print('🚀 Navigating to job offers');
       _router.go('/v/job-offers');
       return;
     }
 
+    // --------------------------------------------
+    // ORDER UPDATE
+    // --------------------------------------------
     if (type == 'order_update') {
       final id = data['order_id'];
+
+      print('🆔 Order update id: $id');
+
       if (id != null) {
-        _router.go('/c/orders/$id');
+        final targetRoute = '/c/orders/$id';
+
+        print('🚀 Navigating to: $targetRoute');
+        _router.go(targetRoute);
         return;
       }
+
+      print('🚀 Navigating to tracking fallback');
       _router.go('/c/order/tracking');
       return;
     }
 
+    // --------------------------------------------
+    // DEFAULT FALLBACK
+    // --------------------------------------------
+    print('⚠️ No mapping matched → opening notifications');
+
     _router.go('/notifications');
   }
+
 }

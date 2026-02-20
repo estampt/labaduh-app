@@ -35,13 +35,9 @@ final List<RouteBase> vendorShellRoutes = [
       // =====================================================
       StatefulShellBranch(
         routes: [
-          GoRoute(
-            path: '/v/home',
-            builder: (context, state) => const VendorDashboardTab(),
-          ),
-
           // -------------------------------
-          // /v/home/:orderId
+          // /v/home
+          // /v/home/:id   (notification deeplink uses broadcast_id)
           // -------------------------------
           GoRoute(
             path: '/v/home',
