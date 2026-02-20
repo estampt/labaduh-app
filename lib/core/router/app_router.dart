@@ -21,7 +21,7 @@ import '../../features/auth/presentation/signup_screen.dart';
 import '../../features/customer/shell/presentation/customer_shell.dart';
 import '../../features/customer/home/presentation/customer_home_tab.dart';
 import '../../features/customer/order/presentation/orders_tab.dart';
-import '../../features/customer/orders/presentation/order_detail_screen.dart';
+//import '../../features/customer/orders/presentation/order_detail_screen.dart';
 import '../../features/customer/wallet/presentation/wallet_tab.dart';
 import '../../features/customer/profile/presentation/profile_tab.dart';
 import '../../features/customer/profile/presentation/address_book_screen.dart';
@@ -111,6 +111,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/c/orders',
                 builder: (context, state) => const OrdersTab(),
+                /*
                 routes: [
                   GoRoute(
                     path: ':id',
@@ -118,6 +119,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         OrderDetailScreen(orderId: state.pathParameters['id'] ?? ''),
                   ),
                 ],
+                */
               ),
             ],
           ),

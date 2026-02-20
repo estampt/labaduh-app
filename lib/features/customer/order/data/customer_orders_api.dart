@@ -13,14 +13,30 @@ class CustomerOrdersApi {
 
   Future<LatestOrdersResponse> latestOrders({String? cursor}) async {
     final res = await dio.get(
-      '/api/v1/customer/orders/latest',
+      '/api/v1/customer/orders/getorders',
       queryParameters: cursor == null ? null : {'cursor': cursor},
     );
 
     return LatestOrdersResponse.fromJson(Map<String, dynamic>.from(res.data));
   }
+  
+  Future<LatestOrdersResponse> getOrderById({
+      required int orderId,
+      String? category, // weight_review, delivery_proof, etc.
+    }) async {
+      final res = await dio.get(
+        '/api/v1/customer/orders/by_id/$orderId',
+        queryParameters: {
+          if (category != null) 'category': category,
+        },
+      );
 
+      return LatestOrdersResponse.fromJson(
+        Map<String, dynamic>.from(res.data),
+      );
+  }
 
+  
   /// Generic orders list (e.g. history)
   /// Example: /api/v1/customer/orders?status=completed
   Future<LatestOrdersResponse> listOrders({String? status, String? cursor}) async {

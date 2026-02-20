@@ -95,10 +95,6 @@ class _ShopSelectionPageState extends ConsumerState<ShopSelectionPage> {
         title: const Text('Select Shop'),
         automaticallyImplyLeading: false, // vendor must logout to switch
         actions: [
-          TextButton(
-            onPressed: _logout,
-            child: const Text('Logout'),
-          ),
         ],
       ),
       body: state.when(
