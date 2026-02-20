@@ -1,8 +1,4 @@
 // vendor_order_model.dart
-//
-// Models for: GET /api/v1/vendors/{vendorId}/shops/{shopId}/orders
-// Based on the JSON you provided.
-
 import 'package:labaduh/core/utils/order_status_utils.dart';
 
 class VendorOrdersPage {
@@ -63,31 +59,72 @@ class VendorOrderModel {
   final List<VendorOrderItemModel> items;
 
   factory VendorOrderModel.fromJson(Map<String, dynamic> json) {
-    return VendorOrderModel(
-      id: _toInt(json['id']) ?? 0,
-      status: (json['status'] as String?) ?? 'unknown',
-      createdAt: _toDateTime(json['created_at']),
-      updatedAt: _toDateTime(json['updated_at']),
-      subtotal: _toDouble(json['subtotal']) ?? 0,
-      deliveryFee: _toDouble(json['delivery_fee']) ?? 0,
-      serviceFee: _toDouble(json['service_fee']) ?? 0,
-      discount: _toDouble(json['discount']) ?? 0,
+    // ✅ Support BOTH shapes:
+    // A) vendor orders endpoint: { id, status, subtotal, ... }
+    // B) broadcast endpoint: { order_id, order:{status,total,created_at}, customer:{...}, items:[...] }
 
-      shopId: _toInt(json['shop_id']) ?? 0,
-      acceptedShop: (json['accepted_shop'] is Map)
-          ? VendorShopModel.fromJson((json['accepted_shop'] as Map).cast<String, dynamic>())
-          : null,
-      customer: (json['customer'] is Map)
-          ? VendorCustomerModel.fromJson((json['customer'] as Map).cast<String, dynamic>())
-          : null,
-      itemsCount: _toInt(json['items_count']) ?? 0,
-      services: (json['services'] as List<dynamic>? ?? const [])
-          .whereType<String>()
-          .toList(growable: false),
-      items: (json['items'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map((e) => VendorOrderItemModel.fromJson(e.cast<String, dynamic>()))
-          .toList(growable: false),
+    final orderObj = (json['order'] is Map)
+        ? (json['order'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+
+    final id = _toInt(json['id']) ?? _toInt(json['order_id']) ?? 0;
+
+    final status =
+        (json['status'] as String?) ?? (orderObj['status'] as String?) ?? 'unknown';
+
+    final createdAt = _toDateTime(json['created_at']) ?? _toDateTime(orderObj['created_at']);
+    final updatedAt = _toDateTime(json['updated_at']) ?? _toDateTime(orderObj['updated_at']);
+
+    final items = (json['items'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((e) => VendorOrderItemModel.fromJson(e.cast<String, dynamic>()))
+        .toList(growable: false);
+
+    // totals
+    final subtotal = _toDouble(json['subtotal']) ??
+        _toDouble(orderObj['subtotal']) ??
+        // broadcast only has `order.total` in your payload:
+        _toDouble(orderObj['total']) ??
+        // fallback: sum computed lines
+        items.fold<double>(0, (sum, it) => sum + it.totalComputed);
+
+    final deliveryFee = _toDouble(json['delivery_fee']) ?? _toDouble(orderObj['delivery_fee']) ?? 0;
+    final serviceFee = _toDouble(json['service_fee']) ?? _toDouble(orderObj['service_fee']) ?? 0;
+    final discount = _toDouble(json['discount']) ?? _toDouble(orderObj['discount']) ?? 0;
+
+    final shopId = _toInt(json['shop_id']) ?? 0;
+
+    final customer = (json['customer'] is Map)
+        ? VendorCustomerModel.fromJson((json['customer'] as Map).cast<String, dynamic>())
+        : null;
+
+    final acceptedShop = (json['accepted_shop'] is Map)
+        ? VendorShopModel.fromJson((json['accepted_shop'] as Map).cast<String, dynamic>())
+        : null;
+
+    final services = items
+        .map((it) => it.service?.displayName ?? 'Service')
+        .where((s) => s.trim().isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    final itemsCount = _toInt(json['items_count']) ?? items.length;
+
+    return VendorOrderModel(
+      id: id,
+      status: status,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      subtotal: subtotal,
+      deliveryFee: deliveryFee,
+      serviceFee: serviceFee,
+      discount: discount,
+      shopId: shopId,
+      acceptedShop: acceptedShop,
+      customer: customer,
+      itemsCount: itemsCount,
+      services: services,
+      items: items,
     );
   }
 
@@ -97,12 +134,10 @@ class VendorOrderModel {
 
   String get customerName => customer?.name ?? 'Customer';
 
-  String get servicesLabel =>
-      services.isEmpty ? 'No services' : services.join(', ');
+  String get servicesLabel => services.isEmpty ? 'No services' : services.join(', ');
 
   double get grandTotal => subtotal + deliveryFee + serviceFee - discount;
 }
-
 
 class VendorShopModel {
   const VendorShopModel({
@@ -172,12 +207,8 @@ class VendorCustomerModel {
   }
 
   String get addressLabel {
-    final parts = [
-      addressLine1,
-      addressLine2,
-      postalCode,
-    ].where((e) => (e ?? '').trim().isNotEmpty);
-
+    final parts = [addressLine1, addressLine2, postalCode]
+        .where((e) => (e ?? '').trim().isNotEmpty);
     return parts.isEmpty ? '—' : parts.join(', ');
   }
 }
@@ -201,24 +232,14 @@ class VendorOrderItemModel {
   });
 
   final int id;
-
-  /// Primary quantity used by UI (derived from `qty` or `quantity` in JSON)
   final int quantity;
-
   final int? qtyEstimated;
   final int? qtyActual;
-
   final String? uom;
-
-  /// e.g. tiered_min_plus, per_kg_min, etc.
   final String? pricingModel;
-
-  /// Monetary / numeric fields (API sometimes returns strings)
   final double? minimum;
   final double? minPrice;
   final double? pricePerUom;
-
-  /// Price snapshots
   final double? computedPrice;
   final double? estimatedPrice;
   final double? finalPrice;
@@ -227,7 +248,21 @@ class VendorOrderItemModel {
   final List<VendorOrderOptionModel> options;
 
   factory VendorOrderItemModel.fromJson(Map<String, dynamic> json) {
+    // ✅ qty can be "7.00" in broadcast payload
     final qty = _toInt(json['qty']) ?? _toInt(json['quantity']) ?? 1;
+
+    // ✅ service can be nested OR snapshot fields like service_name/service_description
+    VendorServiceModel? service;
+    if (json['service'] is Map) {
+      service = VendorServiceModel.fromJson((json['service'] as Map).cast<String, dynamic>());
+    } else {
+      final sid = _toInt(json['service_id']) ?? 0;
+      final sname = json['service_name'] as String?;
+      final sdesc = json['service_description'] as String?;
+      if ((sname ?? '').trim().isNotEmpty || (sdesc ?? '').trim().isNotEmpty || sid != 0) {
+        service = VendorServiceModel(id: sid, name: sname, description: sdesc);
+      }
+    }
 
     return VendorOrderItemModel(
       id: _toInt(json['id']) ?? 0,
@@ -242,11 +277,7 @@ class VendorOrderItemModel {
       computedPrice: _toDouble(json['computed_price']),
       estimatedPrice: _toDouble(json['estimated_price']),
       finalPrice: _toDouble(json['final_price']),
-      service: (json['service'] is Map)
-          ? VendorServiceModel.fromJson(
-              (json['service'] as Map).cast<String, dynamic>(),
-            )
-          : null,
+      service: service,
       options: (json['options'] as List<dynamic>? ?? const [])
           .whereType<Map>()
           .map((e) => VendorOrderOptionModel.fromJson(e.cast<String, dynamic>()))
@@ -254,16 +285,14 @@ class VendorOrderItemModel {
     );
   }
 
-  /// Convenience label like "3 KG"
   String get qtyLabel {
     final u = (uom ?? '').trim();
     return u.isEmpty ? '$quantity' : '$quantity ${u.toUpperCase()}';
   }
 
-  /// computed_price + options computed_price (best-effort)
   double get totalComputed {
-    final base = computedPrice ?? 0.0;
-    final addOns = options.fold<double>(0.0, (sum, o) => sum + (o.computedPrice ?? 0.0));
+    final base = computedPrice ?? estimatedPrice ?? finalPrice ?? 0.0;
+    final addOns = options.fold<double>(0.0, (sum, o) => sum + (o.computedPrice ?? o.price ?? 0.0));
     return base + addOns;
   }
 }
@@ -276,8 +305,6 @@ class VendorServiceModel {
   });
 
   final int id;
-
-  /// These may be missing depending on your payload / snapshot rules.
   final String? name;
   final String? description;
 
@@ -290,7 +317,6 @@ class VendorServiceModel {
   }
 
   String get displayName => (name == null || name!.trim().isEmpty) ? 'Service' : name!.trim();
-
   String get displayDescription =>
       (description == null || description!.trim().isEmpty) ? '—' : description!.trim();
 }
@@ -307,25 +333,31 @@ class VendorOrderOptionModel {
   });
 
   final int id;
-
   final int? serviceOptionId;
-
-  /// Option quantity; API can send null, default to 1
   final int qty;
-
-  /// Base price snapshot
   final double? price;
-
   final bool isRequired;
-
-  /// Computed snapshot price for this option (best for displaying totals)
   final double? computedPrice;
-
   final VendorServiceOptionModel? serviceOption;
 
   factory VendorOrderOptionModel.fromJson(Map<String, dynamic> json) {
     final rawReq = json['is_required'];
     final req = rawReq == true || rawReq == 1 || rawReq == '1';
+
+    VendorServiceOptionModel? opt;
+    if (json['service_option'] is Map) {
+      opt = VendorServiceOptionModel.fromJson(
+        (json['service_option'] as Map).cast<String, dynamic>(),
+      );
+    } else {
+      // ✅ broadcast snapshot fields: service_option_name/service_option_description
+      final oid = _toInt(json['service_option_id']) ?? 0;
+      final oname = json['service_option_name'] as String?;
+      final odesc = json['service_option_description'] as String?;
+      if ((oname ?? '').trim().isNotEmpty || (odesc ?? '').trim().isNotEmpty || oid != 0) {
+        opt = VendorServiceOptionModel(id: oid, name: oname, description: odesc);
+      }
+    }
 
     return VendorOrderOptionModel(
       id: _toInt(json['id']) ?? 0,
@@ -334,11 +366,7 @@ class VendorOrderOptionModel {
       price: _toDouble(json['price']),
       isRequired: req,
       computedPrice: _toDouble(json['computed_price']),
-      serviceOption: (json['service_option'] is Map)
-          ? VendorServiceOptionModel.fromJson(
-              (json['service_option'] as Map).cast<String, dynamic>(),
-            )
-          : null,
+      serviceOption: opt,
     );
   }
 }
@@ -351,8 +379,6 @@ class VendorServiceOptionModel {
   });
 
   final int id;
-
-  /// May be missing depending on payload
   final String? name;
   final String? description;
 
@@ -365,20 +391,27 @@ class VendorServiceOptionModel {
   }
 
   String get displayName => (name == null || name!.trim().isEmpty) ? 'Option' : name!.trim();
-
   String get displayDescription =>
       (description == null || description!.trim().isEmpty) ? '—' : description!.trim();
 }
 
 // ----------------------------
-// Helpers (null-safe parsing)
+// Helpers
 // ----------------------------
 
 int? _toInt(dynamic v) {
   if (v == null) return null;
   if (v is int) return v;
   if (v is num) return v.toInt();
-  if (v is String) return int.tryParse(v);
+  if (v is String) {
+    final s = v.trim();
+    if (s.isEmpty) return null;
+    // ✅ handles "7.00"
+    final asInt = int.tryParse(s);
+    if (asInt != null) return asInt;
+    final asDouble = double.tryParse(s);
+    if (asDouble != null) return asDouble.toInt();
+  }
   return null;
 }
 
@@ -400,5 +433,3 @@ DateTime? _toDateTime(dynamic v) {
   }
   return null;
 }
-
-

@@ -64,12 +64,12 @@ class VendorOrderRepository {
   }
 
 
-   Future<List<VendorOrderModel>?> getOrderBroadCast({
+   Future<List<VendorOrderModel>?> getOrderBroadCastByOrderId({
     required int vendorId,
     required int shopId,
     required int orderId,
   }) async {
-    final page = await fetchOrderBroadCast(
+    final page = await fetchOrderBroadCastByOrderId(
       vendorId: vendorId,
       shopId: shopId,
       orderId: orderId,
@@ -79,7 +79,7 @@ class VendorOrderRepository {
   }
 
 
-  Future<VendorOrdersPage> fetchOrderBroadCast({
+  Future<VendorOrdersPage> fetchOrderBroadCastByOrderId({
     required int vendorId,
     required int shopId,
     required int orderId,
@@ -87,7 +87,7 @@ class VendorOrderRepository {
   }) async {
     try {
       final res = await _api.dio.get(
-        '/api/v1/vendors/$vendorId/shops/$shopId/orderBroadcast',
+        '/api/v1/vendors/$vendorId/shops/$shopId/orders/broadcasted_by_order_id',
         queryParameters: {
           if (cursor != null) 'cursor': cursor,
           if (orderId != null) 'order_id': orderId, // ✅ added
@@ -109,6 +109,34 @@ class VendorOrderRepository {
 
   // ✅ Broadcasted order headers (order + customer only)
   Future<BroadcastOrderHeadersPage> fetchBroadcastedOrderHeadersByShop({
+    required int vendorId,
+    required int shopId,
+    int perPage = 10,
+    String? cursor,
+  }) async {
+    try {
+      final res = await _api.dio.get(
+        '/api/v1/vendors/$vendorId/shops/$shopId/orders/broadcasted',
+        queryParameters: {
+          'per_page': perPage,
+          if (cursor != null) 'cursor': cursor,
+        },
+      );
+
+      final data = res.data;
+      if (data is! Map<String, dynamic>) {
+        throw StateError('Unexpected response shape: ${data.runtimeType}');
+      }
+      return BroadcastOrderHeadersPage.fromJson(data);
+    } on DioException catch (e) {
+      throw VendorOrderRepositoryException(_dioMessage(e));
+    } catch (e) {
+      throw VendorOrderRepositoryException(e.toString());
+    }
+  }
+
+  // ✅ Broadcasted order headers (order + customer only)
+  Future<BroadcastOrderHeadersPage> getOrderBroadcastByOrderId({
     required int vendorId,
     required int shopId,
     int perPage = 10,
@@ -433,6 +461,7 @@ class BroadcastOrder {
     required this.status,
     required this.pickupMode,
     required this.deliveryMode,
+    required this.deliveryDate,
     required this.currency,
     required this.total,
     required this.createdAt,
@@ -441,6 +470,7 @@ class BroadcastOrder {
   final String status;
   final String pickupMode;
   final String deliveryMode;
+  final DateTime deliveryDate;
   final String currency;
   final String total;
   final String createdAt;
@@ -450,6 +480,7 @@ class BroadcastOrder {
       status: (json['status'] ?? '').toString(),
       pickupMode: (json['pickup_mode'] ?? '').toString(),
       deliveryMode: (json['delivery_mode'] ?? '').toString(),
+      deliveryDate: DateTime.tryParse((json['delivery_date'] ?? '').toString()) ?? DateTime.now(),
       currency: (json['currency'] ?? '').toString(),
       total: (json['total'] ?? '').toString(),
       createdAt: (json['created_at'] ?? '').toString(),

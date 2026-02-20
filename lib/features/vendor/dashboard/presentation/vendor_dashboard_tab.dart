@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:labaduh/core/auth/session_notifier.dart';
 import 'package:labaduh/features/vendor/orders/state/vendor_orders_provider.dart';
 
 import '../../orders/data/vendor_orders_repository.dart';
@@ -106,10 +107,24 @@ class VendorDashboardTab extends ConsumerWidget {
   const VendorDashboardTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    const shopId = 2; // TODO: wire from selected shop
-    final incomingAsync = ref.watch(vendorIncomingBroadcastStreamProvider((vendorId: 2, shopId: shopId)));
-    final ordersAsync = ref.watch(vendorOrdersProvider((vendorId: 2, shopId: shopId)));
+    Widget build(BuildContext context, WidgetRef ref) {
+      final session = ref.watch(sessionNotifierProvider);
+
+      final vendorId = int.tryParse(session.vendorId ?? '0') ?? 0;
+      final shopId = session.activeShopId ?? 0;
+
+      // Optional: handle missing session values gracefully
+      if (vendorId <= 0 || shopId <= 0) {
+        return const Center(child: Text('No active shop selected.'));
+      }
+
+      final incomingAsync = ref.watch(
+        vendorIncomingBroadcastStreamProvider((vendorId: vendorId, shopId: shopId)),
+      );
+
+      final ordersAsync = ref.watch(
+        vendorOrdersProvider((vendorId: vendorId, shopId: shopId)),
+      );
     final buckets = ordersAsync.maybeWhen(
       data: (orders) => _computeDashboardBuckets(orders),
       orElse: () => const _DashboardBuckets(),
@@ -338,7 +353,7 @@ class _IncomingOrderTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: () {
         context.go(
-          '/v/orders/${item.orderId}', // 🔥 deeplink
+          '/v/home/${item.orderId}', // 🔥 deeplink
         );
       },
       child: Card(
@@ -348,85 +363,87 @@ class _IncomingOrderTile extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// LEFT CONTENT
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    /// Customer Name
-                    Text(
+              /// 🔹 Top Row — Name + TOTAL Amount
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// Customer Name
+                  Expanded(
+                    child: Text(
                       c.name,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 15,
                       ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    /// Address
-                    if (address.isNotEmpty)
-                      Text(
-                        address,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.grey.shade700,
-                          height: 1.35,
-                        ),
-                      ),
-
-                    const SizedBox(height: 8),
-
-                    /// Modes
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        _ModeChip(
-                          icon: Icons.schedule_outlined,
-                          label: o.pickupMode,
-                        ),
-                        _ModeChip(
-                          icon: Icons.local_shipping_outlined,
-                          label: o.deliveryMode,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 12),
-
-              /// RIGHT — TOTAL AMOUNT
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    'TOTAL',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey,
-                      letterSpacing: .6,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    totalLabel,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
+
+                  const SizedBox(width: 12),
+
+                  /// TOTAL + Amount (same row)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'TOTAL',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey,
+                          letterSpacing: .6,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        totalLabel,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 6),
+
+              /// 🔹 Address
+              if (address.isNotEmpty)
+                Text(
+                  address,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.grey.shade700,
+                    height: 1.35,
+                  ),
+                ),
+
+              const SizedBox(height: 8),
+
+              /// 🔹 Pickup / Delivery Modes
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _ModeChip(
+                    icon: Icons.schedule_outlined,
+                    label: o.pickupMode,
+                  ),
+                  _ModeChip(
+                    icon: Icons.local_shipping_outlined,
+                    label: o.deliveryMode,
                   ),
                 ],
               ),
             ],
           ),
-        ),
+          ),
       ),
     );
 
