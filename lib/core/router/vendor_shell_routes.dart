@@ -55,7 +55,7 @@ final List<RouteBase> vendorShellRoutes = [
               GoRoute(
                 path: ':id',
                 builder: (context, state) {
-                  final orderId =
+                  final broadcastId =
                       int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
 
                   return Consumer(
@@ -67,7 +67,7 @@ final List<RouteBase> vendorShellRoutes = [
                       final shopId = session.activeShopId ?? 0;
 
                       return OrderAcceptanceScreen(
-                        orderId: orderId,
+                        broadcastId: broadcastId,
                         vendorId: vendorId,
                         shopId: shopId,
                       );

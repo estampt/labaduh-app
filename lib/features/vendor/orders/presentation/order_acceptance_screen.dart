@@ -9,14 +9,14 @@ const double _kBottomBarHeight = 76;
 
 final vendorOrderAcceptanceProvider = FutureProvider.family<
     VendorOrderModel,
-    ({int vendorId, int shopId, int orderId})>((ref, p) async {
-  debugPrint('🟨 [OrderAcceptanceProvider] FETCH vendor=${p.vendorId} shop=${p.shopId} order=${p.orderId}');
+    ({int vendorId, int shopId, int broadcastId})>((ref, p) async {
+  debugPrint('🟨 [OrderAcceptanceProvider] FETCH vendor=${p.vendorId} shop=${p.shopId} broadcast id =${p.broadcastId}');
   final repo = ref.read(vendorOrderRepositoryProvider);
 
-  final orders = await repo.getOrderBroadCastByOrderId(
+  final orders = await repo.getOrderByBroadcastId(
+    broadcastId: p.broadcastId,
     vendorId: p.vendorId,
-    shopId: p.shopId,
-    orderId: p.orderId,
+    shopId: p.shopId, 
   );
 
   if (orders == null || orders.isEmpty) throw Exception('Order not found');
@@ -26,12 +26,12 @@ final vendorOrderAcceptanceProvider = FutureProvider.family<
 class OrderAcceptanceScreen extends ConsumerWidget {
   const OrderAcceptanceScreen({
     super.key,
-    required this.orderId,
+    required this.broadcastId,
     required this.vendorId,
     required this.shopId,
   });
 
-  final int orderId;
+  final int broadcastId;
   final int vendorId;
   final int shopId;
 
@@ -39,19 +39,19 @@ class OrderAcceptanceScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncOrder = ref.watch(
       vendorOrderAcceptanceProvider(
-        (vendorId: vendorId, shopId: shopId, orderId: orderId),
+        (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
       ),
     );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Order #$orderId'),
+        title: Text('Broadcast Id #$broadcastId'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(
               vendorOrderAcceptanceProvider(
-                (vendorId: vendorId, shopId: shopId, orderId: orderId),
+                (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
               ),
             ),
           ),
@@ -61,12 +61,12 @@ class OrderAcceptanceScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(
             vendorOrderAcceptanceProvider(
-              (vendorId: vendorId, shopId: shopId, orderId: orderId),
+              (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
             ),
           );
           await ref.read(
             vendorOrderAcceptanceProvider(
-              (vendorId: vendorId, shopId: shopId, orderId: orderId),
+              (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
             ).future,
           );
         },
@@ -133,7 +133,7 @@ class OrderAcceptanceScreen extends ConsumerWidget {
 
       ref.invalidate(
         vendorOrderAcceptanceProvider(
-          (vendorId: vendorId, shopId: shopId, orderId: orderId),
+          (vendorId: vendorId, shopId: shopId, broadcastId: broadcastId),
         ),
       );
     } catch (e) {

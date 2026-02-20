@@ -64,33 +64,33 @@ class VendorOrderRepository {
   }
 
 
-   Future<List<VendorOrderModel>?> getOrderBroadCastByOrderId({
+   Future<List<VendorOrderModel>?> getOrderByBroadcastId({
+    required int broadcastId,    
     required int vendorId,
     required int shopId,
-    required int orderId,
   }) async {
-    final page = await fetchOrderBroadCastByOrderId(
+    final page = await fetchOrderByBroadcastId(
+      broadcastId: broadcastId,
       vendorId: vendorId,
       shopId: shopId,
-      orderId: orderId,
       cursor: null,
     );
     return page.orders;
   }
 
 
-  Future<VendorOrdersPage> fetchOrderBroadCastByOrderId({
+  Future<VendorOrdersPage> fetchOrderByBroadcastId({
+    required int broadcastId,
     required int vendorId,
     required int shopId,
-    required int orderId,
-    String? cursor,
+    String? cursor, 
   }) async {
     try {
       final res = await _api.dio.get(
-        '/api/v1/vendors/$vendorId/shops/$shopId/orders/broadcasted_by_order_id',
+        '/api/v1/vendors/$vendorId/shops/$shopId/orders/broadcast_by_id',
         queryParameters: {
           if (cursor != null) 'cursor': cursor,
-          if (orderId != null) 'order_id': orderId, // ✅ added
+          if (broadcastId != null) 'broadcast_id': broadcastId, // ✅ added
         },
       );
       final data = res.data;
@@ -415,20 +415,17 @@ class BroadcastOrderHeadersPage {
 
 class BroadcastOrderHeader {
   BroadcastOrderHeader({
-    required this.orderId,
     required this.broadcast,
     required this.order,
     required this.customer,
   });
 
-  final int orderId;
   final BroadcastMeta broadcast;
   final BroadcastOrder order;
   final BroadcastCustomer customer;
 
   factory BroadcastOrderHeader.fromJson(Map<String, dynamic> json) {
     return BroadcastOrderHeader(
-      orderId: (json['order_id'] as num?)?.toInt() ?? 0,
       broadcast: BroadcastMeta.fromJson(
         (json['broadcast'] as Map?)?.cast<String, dynamic>() ?? const {},
       ),
@@ -443,13 +440,15 @@ class BroadcastOrderHeader {
 }
 
 class BroadcastMeta {
-  BroadcastMeta({required this.status, required this.sentAt});
+  BroadcastMeta({required this.status, required this.sentAt, required this.broadcastId});
 
+  final String broadcastId;
   final String status;
   final String? sentAt;
 
   factory BroadcastMeta.fromJson(Map<String, dynamic> json) {
     return BroadcastMeta(
+      broadcastId: (json['broadcast_id'] ?? '').toString(),
       status: (json['status'] ?? '').toString(),
       sentAt: json['sent_at']?.toString(),
     );

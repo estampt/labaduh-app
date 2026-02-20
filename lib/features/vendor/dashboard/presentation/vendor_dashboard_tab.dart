@@ -338,6 +338,7 @@ class _IncomingOrderTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = item.customer;
     final o = item.order;
+    final b = item.broadcast;
 
     final addr1 = (c.addressLine1 ?? '').trim();
     final addr2 = (c.addressLine2 ?? '').trim();
@@ -353,7 +354,7 @@ class _IncomingOrderTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: () {
         context.go(
-          '/v/home/${item.orderId}', // 🔥 deeplink
+          '/v/home/${b.broadcastId}', // 🔥 deeplink
         );
       },
       child: Card(
