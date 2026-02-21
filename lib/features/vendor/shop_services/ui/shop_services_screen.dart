@@ -138,43 +138,170 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                         child: Card(
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(18),
                             side: BorderSide(
                               color: Theme.of(context).dividerColor.withOpacity(0.5),
                             ),
                           ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                leading: CircleAvatar(child: Icon(leadingIcon)),
-
-                                // ✅ Beautified: name + optional description (without using subtitle)
-                                title: Column(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // ============================================================
+                                // HEADER: icon + (name/desc) + status pill + menu
+                                // ============================================================
+                                Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      serviceName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w700),
-                                    ),
-                                    if (serviceDescription.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        serviceDescription,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surfaceVariant
+                                            .withOpacity(0.7),
+                                        shape: BoxShape.circle,
                                       ),
-                                    ],
+                                      child: Icon(leadingIcon, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  serviceName,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 15,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // Status pill (tap to toggle)
+                                              InkWell(
+                                                borderRadius: BorderRadius.circular(999),
+                                                onTap: () async {
+                                                  try {
+                                                    HapticFeedback.lightImpact();
+                                                    await ref
+                                                        .read(shopServicesProvider.notifier)
+                                                        .toggleActive(r);
+                                                  } catch (e) {
+                                                    if (!context.mounted) return;
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text('Failed to update status: $e')),
+                                                    );
+                                                  }
+                                                },
+                                                child: AnimatedContainer(
+                                                  duration: const Duration(milliseconds: 200),
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 6,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: r.isActive
+                                                        ? Colors.green.withOpacity(0.10)
+                                                        : Colors.grey.withOpacity(0.12),
+                                                    borderRadius: BorderRadius.circular(999),
+                                                    border: Border.all(
+                                                      color: r.isActive ? Colors.green : Colors.grey,
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        r.isActive
+                                                            ? Icons.check_circle_outline
+                                                            : Icons.pause_circle_outline,
+                                                        size: 16,
+                                                        color: r.isActive ? Colors.green : Colors.grey,
+                                                      ),
+                                                      const SizedBox(width: 6),
+                                                      Text(
+                                                        r.isActive ? 'Active' : 'Inactive',
+                                                        style: TextStyle(
+                                                          fontSize: 12.5,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: r.isActive ? Colors.green : Colors.grey,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+
+                                              const SizedBox(width: 4),
+
+                                              PopupMenuButton<String>(
+                                                icon: const Icon(Icons.more_vert, size: 20),
+                                                onSelected: (v) async {
+                                                  if (v == 'edit') {
+                                                    await _openEditServiceSheet(context, ref, r);
+                                                  } else if (v == 'delete') {
+                                                    final ok = await _confirmDelete(context, serviceName);
+                                                    if (ok == true) {
+                                                      await ref.read(shopServicesProvider.notifier).delete(r.id);
+                                                    }
+                                                  }
+                                                },
+                                                itemBuilder: (context) => const [
+                                                  PopupMenuItem(
+                                                    value: 'edit',
+                                                    child: ListTile(
+                                                      dense: true,
+                                                      leading: Icon(Icons.edit_outlined),
+                                                      title: Text('Edit'),
+                                                    ),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value: 'delete',
+                                                    child: ListTile(
+                                                      dense: true,
+                                                      leading: Icon(Icons.delete_outline),
+                                                      title: Text('Delete'),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+
+                                          if (serviceDescription.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              serviceDescription,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.2),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
 
-                                // ✅ Keep your chips here
-                                subtitle: Padding(
-                                  padding: const EdgeInsets.only(top: 6),
+                                const SizedBox(height: 10),
+
+                                // ============================================================
+                                // CHIPS ROW (matches screenshot)
+                                // ============================================================
+                                Align(
+                                  alignment: Alignment.centerLeft,
                                   child: Wrap(
                                     spacing: 8,
                                     runSpacing: 8,
@@ -182,177 +309,121 @@ class _ShopServicesScreenState extends ConsumerState<ShopServicesScreen> {
                                       _Chip(icon: modelIcon, label: modelLabel),
                                       _Chip(icon: Icons.scale_outlined, label: 'uom ${r.uom}'),
                                       _Chip(icon: Icons.payments_outlined, label: priceLabel),
-
-                                      // ✅ Cleaner toggle chip (no GestureDetector wrapper; InkWell only)
-                                      InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: () async {
-                                          try {
-                                            HapticFeedback.lightImpact();
-                                            await ref.read(shopServicesProvider.notifier).toggleActive(r);
-                                          } catch (e) {
-                                            if (!context.mounted) return;
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Failed to update status: $e')),
-                                            );
-                                          }
-                                        },
-                                        child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 200),
-                                          height: 32,
-                                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                                          decoration: BoxDecoration(
-                                            color: r.isActive
-                                                ? Colors.green.withOpacity(0.12)
-                                                : Colors.grey.withOpacity(0.12),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              width: 1,
-                                              color: r.isActive ? Colors.green : Colors.grey,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                r.isActive
-                                                    ? Icons.check_circle_outline
-                                                    : Icons.pause_circle_outline,
-                                                size: 16,
-                                                color: r.isActive ? Colors.green : Colors.grey,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                r.isActive ? 'Active' : 'Inactive',
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: r.isActive ? Colors.green : Colors.grey,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
                                     ],
                                   ),
                                 ),
 
-                                trailing: PopupMenuButton<String>(
-                                  icon: const Icon(Icons.more_vert),
-                                  onSelected: (v) async {
-                                    if (v == 'edit') {
-                                      await _openEditServiceSheet(context, ref, r);
-                                    } else if (v == 'delete') {
-                                      final ok = await _confirmDelete(context, serviceName);
-                                      if (ok == true) {
-                                        await ref.read(shopServicesProvider.notifier).delete(r.id);
-                                      }
-                                    }
-                                  },
-                                  itemBuilder: (context) => const [
-                                    PopupMenuItem(
-                                      value: 'edit',
-                                      child: ListTile(
-                                        leading: Icon(Icons.edit_outlined),
-                                        title: Text('Edit'),
-                                      ),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: ListTile(
-                                        leading: Icon(Icons.delete_outline),
-                                        title: Text('Delete'),
-                                      ),
-                                    ),
-                                  ],
+                                const SizedBox(height: 12),
+                                Divider(
+                                  height: 1,
+                                  color: Theme.of(context).dividerColor.withOpacity(0.5),
                                 ),
-                              ),
+                                const SizedBox(height: 10),
 
-
-                              // Child section
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                                child: Column(
+                                // ============================================================
+                                // ADD-ONS HEADER (Service Add-ons  + Manage)
+                                // ============================================================
+                                Row(
                                   children: [
-                                    Divider(
-                                      height: 1,
-                                      color: Theme.of(context).dividerColor.withOpacity(0.5),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        const Expanded(
-                                          child: Text(
-                                            'Service Add-ons',
-                                            style: TextStyle(fontWeight: FontWeight.w800),
-                                          ),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: () async {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => ShopServiceOptionsScreen(
-                                                  vendorId: widget.vendorId,
-                                                  shopId: widget.shopId,
-                                                  shopService: r,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          icon: const Icon(Icons.add),
-                                          label: const Text('Manage'),
-                                        ),
-
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    if ((r.options).isEmpty)
-                                      Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          'No add-ons yet. Tap Manage to add.',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                      )
-                                    else
-                                      Column(
-                                        children: (List.of(r.options)..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)))
-                                            .map((o) {
-                                          final optionName = o.serviceOption?.name ?? 'Option #${o.serviceOptionId}';
-                                          return Padding(
-                                            padding: const EdgeInsets.only(top: 8),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    optionName,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Text('S\$${o.price}'),
-                                                const SizedBox(width: 10),
-                                                Icon(
-                                                  o.isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                                                  size: 18,
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }).toList(),
+                                    const Expanded(
+                                      child: Text(
+                                        'Service Add-ons',
+                                        style: TextStyle(fontWeight: FontWeight.w800),
                                       ),
-
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      onPressed: () async {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ShopServiceOptionsScreen(
+                                              vendorId: widget.vendorId,
+                                              shopId: widget.shopId,
+                                              shopService: r,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.add, size: 18),
+                                    ),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      onPressed: () async {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ShopServiceOptionsScreen(
+                                              vendorId: widget.vendorId,
+                                              shopId: widget.shopId,
+                                              shopService: r,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text('Manage'),
+                                    ),
                                   ],
                                 ),
-                              ),
-                            ],
+
+                                const SizedBox(height: 6),
+
+                                // ============================================================
+                                // ADD-ONS LIST (name left, price + check right)
+                                // ============================================================
+                                if (r.options.isEmpty)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'No add-ons yet. Tap Manage to add.',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  )
+                                else
+                                  Column(
+                                    children: (List.of(r.options)
+                                          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)))
+                                        .map((o) {
+                                      final fallbackId = (o.serviceOptionId != 0) ? o.serviceOptionId : o.id;
+                                      final optionName = o.serviceOption?.name ?? 'Option #$fallbackId';
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                optionName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text('S\$${o.price}'),
+                                            const SizedBox(width: 10),
+                                            Icon(
+                                              o.isActive
+                                                  ? Icons.check_circle_outline
+                                                  : Icons.pause_circle_outline,
+                                              size: 18,
+                                              color: o.isActive ? Colors.green : Colors.grey,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                        ),
 
                       );
                   }).toList(),
@@ -633,8 +704,18 @@ Future<void> _openAddServiceSheet(BuildContext context, WidgetRef ref) async {
 }
 
 Future<void> _openEditServiceSheet(BuildContext context, WidgetRef ref, ShopServiceDto row) async {
-  // lock service selection on edit; keep current service name
-  final currentService = row.service ?? ServiceDto(id: row.serviceId, name: 'Service',  isActive: true);  
+  // ✅ Latest DTO safety:
+  // Avoid manually constructing ServiceDto (its constructor may evolve).
+  // Prefer row.service → master list → minimal fromJson fallback.
+  final master = await ref.read(masterServicesProvider.future);
+  final currentService = row.service ??
+      (master.where((s) => s.id == row.serviceId).isNotEmpty
+          ? master.firstWhere((s) => s.id == row.serviceId)
+          : ServiceDto.fromJson({
+              'id': row.serviceId,
+              'name': 'Service',
+              'is_active': true,
+            }));
 
   if (!context.mounted) return;
   await showModalBottomSheet(
@@ -657,12 +738,9 @@ Future<void> _openEditServiceSheet(BuildContext context, WidgetRef ref, ShopServ
           }
         }
       },
-
     ),
   );
 }
-
-
 class _ShopServiceCrudSheet extends StatefulWidget {
   const _ShopServiceCrudSheet({
     required this.title,
@@ -692,7 +770,6 @@ class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
   final _minimumCtrl = TextEditingController();
   final _minPriceCtrl = TextEditingController();
   final _ppuCtrl = TextEditingController();
-  final _currencyCtrl = TextEditingController();
   final _sortCtrl = TextEditingController();
   bool _active = true;
 
@@ -704,8 +781,7 @@ class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
     if (widget.initial == null) {
       // defaults for create
       _pricingModelCtrl.text = 'tiered_min_plus';
-      _uomCtrl.text = (_selected?.baseUnit ?? 'kg');
-      _currencyCtrl.text = 'SGD';
+      _uomCtrl.text = (_selected?.baseUnit ?? 'kg');      
       _sortCtrl.text = '0';
       _active = true;
     } else {
@@ -714,8 +790,7 @@ class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
       _uomCtrl.text = r.uom;
       _minimumCtrl.text = r.minimum ?? '';
       _minPriceCtrl.text = r.minPrice ?? '';
-      _ppuCtrl.text = r.pricePerUom ?? '';
-      _currencyCtrl.text = r.currency;
+      _ppuCtrl.text = r.pricePerUom ?? ''; 
       _sortCtrl.text = r.sortOrder.toString();
       _active = r.isActive;
     }
@@ -727,8 +802,7 @@ class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
     _uomCtrl.dispose();
     _minimumCtrl.dispose();
     _minPriceCtrl.dispose();
-    _ppuCtrl.dispose();
-    _currencyCtrl.dispose();
+    _ppuCtrl.dispose(); 
     _sortCtrl.dispose();
     super.dispose();
   }
@@ -815,13 +889,7 @@ class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
 
                 Row(
                   children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _currencyCtrl,
-                        decoration: const InputDecoration(labelText: 'currency'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                    
                     Expanded(
                       child: TextFormField(
                         controller: _sortCtrl,
@@ -866,10 +934,7 @@ class _ShopServiceCrudSheetState extends State<_ShopServiceCrudSheet> {
                             ? null
                             : num.tryParse(_ppuCtrl.text.trim()),
 
-                        'currency': _currencyCtrl.text.trim().isEmpty
-                            ? 'SGD'
-                            : _currencyCtrl.text.trim(),
-
+ 
                         'sort_order': int.tryParse(_sortCtrl.text.trim()) ?? 0,
                         'is_active': _active,
                       }..removeWhere((k, v) => v == null);

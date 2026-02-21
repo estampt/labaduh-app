@@ -1,5 +1,26 @@
 import 'shop_service_options_dtos.dart'; // <- add this import
 
+bool _asBool(dynamic v, {bool fallback = false}) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  if (v is String) {
+    final s = v.toLowerCase().trim();
+    if (s == 'true' || s == '1' || s == 'yes') return true;
+    if (s == 'false' || s == '0' || s == 'no') return false;
+  }
+  return fallback;
+}
+
+int _asInt(dynamic v, {int fallback = 0}) {
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v?.toString() ?? '') ?? fallback;
+}
+
+String _asString(dynamic v, {String fallback = ''}) {
+  if (v == null) return fallback;
+  return v.toString();
+}
 
 class ServiceDto {
   final int id;
@@ -9,15 +30,23 @@ class ServiceDto {
   final String? icon;
   final String? baseUnit;
 
-  ServiceDto({required this.id, required this.name, this.description, this.isActive = true, this.icon, this.baseUnit});
+  ServiceDto({
+    required this.id,
+    required this.name,
+    this.description,
+    this.isActive = true,
+    this.icon,
+    this.baseUnit,
+  });
 
   factory ServiceDto.fromJson(Map<String, dynamic> j) => ServiceDto(
-        id: j['id'] as int,
-        name: (j['name'] ?? '') as String,
-        description: j['description'] as String?,
-        isActive: (j['active'] ?? false) as bool,
-        icon: j['icon'] as String?,
-        baseUnit: j['base_unit'] as String?,
+        id: _asInt(j['id']),
+        name: _asString(j['name']),
+        description: j['description']?.toString(),
+        // ✅ API uses is_active (often bool/int/string). Some older payloads use "active".
+        isActive: _asBool(j['is_active'] ?? j['active'], fallback: true),
+        icon: j['icon']?.toString(),
+        baseUnit: j['base_unit']?.toString(),
       );
 }
 
@@ -44,7 +73,7 @@ class ShopServiceDto {
     required this.uom,
     this.minimum,
     this.minPrice,
-    this.pricePerUom, 
+    this.pricePerUom,
     required this.isActive,
     required this.currency,
     required this.sortOrder,
@@ -52,25 +81,26 @@ class ShopServiceDto {
     this.options = const [], // ✅ default empty
   });
 
-
   factory ShopServiceDto.fromJson(Map<String, dynamic> j) => ShopServiceDto(
-        id: j['id'] as int,
-        shopId: j['shop_id'] as int,
-        serviceId: j['service_id'] as int,
-        pricingModel: (j['pricing_model'] ?? '') as String,
-        uom: (j['uom'] ?? '') as String,
+        id: _asInt(j['id']),
+        shopId: _asInt(j['shop_id']),
+        serviceId: _asInt(j['service_id']),
+        pricingModel: _asString(j['pricing_model']),
+        uom: _asString(j['uom']),
         minimum: j['minimum']?.toString(),
         minPrice: j['min_price']?.toString(),
         pricePerUom: j['price_per_uom']?.toString(),
-        isActive: (j['is_active'] ?? false) as bool,
-        currency: (j['currency'] ?? 'SGD') as String,
-        sortOrder: (j['sort_order'] ?? 0) as int,
-        service: j['service'] == null ? null : ServiceDto.fromJson(j['service']),
+        isActive: _asBool(j['is_active'], fallback: false),
+        currency: _asString(j['currency'], fallback: 'SGD'),
+        sortOrder: _asInt(j['sort_order']),
+        service: (j['service'] is Map<String, dynamic>)
+            ? ServiceDto.fromJson(j['service'] as Map<String, dynamic>)
+            : null,
         options: (j['options'] is List)
-          ? (j['options'] as List)
-              .cast<Map<String, dynamic>>()
-              .map(ShopServiceOptionDto.fromJson)
-              .toList()
-          : const [],
+            ? (j['options'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map(ShopServiceOptionDto.fromJson)
+                .toList()
+            : const [],
       );
 }

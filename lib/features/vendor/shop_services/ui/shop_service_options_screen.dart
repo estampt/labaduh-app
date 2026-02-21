@@ -18,19 +18,66 @@ class ShopServiceOptionsScreen extends ConsumerStatefulWidget {
   final ShopServiceDto shopService;
 
   @override
-  ConsumerState<ShopServiceOptionsScreen> createState() => _ShopServiceOptionsScreenState();
+  ConsumerState<ShopServiceOptionsScreen> createState() =>
+      _ShopServiceOptionsScreenState();
 }
 
-class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScreen> {
+class _ShopServiceOptionsScreenState
+    extends ConsumerState<ShopServiceOptionsScreen> {
+  static const _tag = '🧩[ShopServiceOptionsScreen]';
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref.read(shopServiceOptionsProvider.notifier).load(
-            vendorId: widget.vendorId,
-            shopId: widget.shopId,
-            shopServiceId: widget.shopService.id,
+
+    debugPrint('$_tag initState');
+    debugPrint(
+      '$_tag ids vendorId=${widget.vendorId} shopId=${widget.shopId} shopServiceId=${widget.shopService.id}',
+    );
+
+    // ✅ Provider listener: logs transitions + errors
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.listen<AsyncValue<List<ShopServiceOptionDto>>>(
+        shopServiceOptionsProvider,
+        (prev, next) {
+          debugPrint('$_tag provider change -> ${next.runtimeType}');
+          next.when(
+            loading: () => debugPrint('$_tag provider=loading'),
+            error: (e, st) {
+              debugPrint('$_tag provider=error: $e');
+              debugPrint('$_tag stack:\n$st');
+            },
+            data: (rows) {
+              debugPrint('$_tag provider=data rows=${rows.length}');
+              if (rows.isNotEmpty) {
+                final r0 = rows.first;
+                debugPrint(
+                  '$_tag firstRow id=${r0.id} shopServiceId=${r0.shopServiceId} '
+                  'serviceOptionId=${r0.serviceOptionId} price=${r0.price} '
+                  'active=${r0.isActive} sort=${r0.sortOrder} '
+                  'name=${r0.serviceOption?.name}',
+                );
+              }
+            },
           );
+        },
+      );
+    });
+
+    // ✅ initial load
+    Future.microtask(() async {
+      debugPrint('$_tag calling load()...');
+      try {
+        await ref.read(shopServiceOptionsProvider.notifier).load(
+              vendorId: widget.vendorId,
+              shopId: widget.shopId,
+              shopServiceId: widget.shopService.id,
+            );
+        debugPrint('$_tag load() done');
+      } catch (e, st) {
+        debugPrint('$_tag load() threw: $e');
+        debugPrint('$_tag stack:\n$st');
+      }
     });
   }
 
@@ -39,13 +86,28 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
     final asyncRows = ref.watch(shopServiceOptionsProvider);
     final serviceName = widget.shopService.service?.name ?? 'Service';
 
+    debugPrint('$_tag build state=${asyncRows.runtimeType}');
+
     return Scaffold(
       appBar: AppBar(
         title: Text('$serviceName • Add-ons'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(shopServiceOptionsProvider.notifier).refresh(),
+            onPressed: () async {
+              debugPrint('$_tag refresh tapped');
+              try {
+                await ref.read(shopServiceOptionsProvider.notifier).refresh();
+                debugPrint('$_tag refresh() done');
+              } catch (e, st) {
+                debugPrint('$_tag refresh() threw: $e');
+                debugPrint('$_tag stack:\n$st');
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Refresh failed: $e')),
+                );
+              }
+            },
           ),
         ],
       ),
@@ -53,9 +115,13 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
         icon: const Icon(Icons.add),
         label: const Text('Add add-on'),
         onPressed: () async {
+          debugPrint('$_tag FAB tapped -> open add sheet');
           try {
             await _openAddOptionSheet(context, ref);
-          } catch (e) {
+            debugPrint('$_tag add sheet closed');
+          } catch (e, st) {
+            debugPrint('$_tag _openAddOptionSheet threw: $e');
+            debugPrint('$_tag stack:\n$st');
             if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Add-on error: $e')),
@@ -64,9 +130,18 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
         },
       ),
       body: asyncRows.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () {
+          debugPrint('$_tag UI loading');
+          return const Center(child: CircularProgressIndicator());
+        },
+        error: (e, st) {
+          debugPrint('$_tag UI error: $e');
+          debugPrint('$_tag UI stack:\n$st');
+          return Center(child: Text('Error: $e'));
+        },
         data: (rows) {
+          debugPrint('$_tag UI data rows=${rows.length}');
+
           if (rows.isEmpty) {
             return const Center(child: Text('No add-ons yet.'));
           }
@@ -77,25 +152,62 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (_, i) {
               final r = rows[i];
-              final name = r.serviceOption?.name ?? 'Option #${r.serviceOptionId}';
+
+              debugPrint(
+                '$_tag renderRow[$i] id=${r.id} shopServiceId=${r.shopServiceId} '
+                'serviceOptionId=${r.serviceOptionId} price=${r.price} '
+                'active=${r.isActive} sort=${r.sortOrder} name=${r.serviceOption?.name}',
+              );
+
+              final name =
+                  r.serviceOption?.name ?? 'Option #${r.serviceOptionId}';
 
               return Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withOpacity(0.5),
+                  ),
                 ),
                 child: ListTile(
                   title: Text(name),
-                  subtitle: Text('Price ${r.price} • sort ${r.sortOrder} • ${r.isActive ? "Active" : "Inactive"}'),
+                  subtitle: Text(
+                    'Price ${r.price} • sort ${r.sortOrder} • ${r.isActive ? "Active" : "Inactive"}',
+                  ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (v) async {
+                      debugPrint('$_tag menu="$v" rowId=${r.id}');
                       if (v == 'edit') {
-                        await _openEditOptionSheet(context, ref, r);
+                        try {
+                          await _openEditOptionSheet(context, ref, r);
+                          debugPrint('$_tag edit sheet closed rowId=${r.id}');
+                        } catch (e, st) {
+                          debugPrint('$_tag _openEditOptionSheet threw: $e');
+                          debugPrint('$_tag stack:\n$st');
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Edit failed: $e')),
+                          );
+                        }
                       } else if (v == 'delete') {
                         final ok = await _confirmDelete(context, name);
+                        debugPrint('$_tag delete confirm=$ok rowId=${r.id}');
                         if (ok == true) {
-                          await ref.read(shopServiceOptionsProvider.notifier).delete(r.id);
+                          try {
+                            debugPrint('$_tag calling delete(id=${r.id})');
+                            await ref
+                                .read(shopServiceOptionsProvider.notifier)
+                                .delete(r.id);
+                            debugPrint('$_tag delete() done id=${r.id}');
+                          } catch (e, st) {
+                            debugPrint('$_tag delete() threw: $e');
+                            debugPrint('$_tag stack:\n$st');
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Delete failed: $e')),
+                            );
+                          }
                         }
                       }
                     },
@@ -114,11 +226,22 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
   }
 
   Future<void> _openAddOptionSheet(BuildContext context, WidgetRef ref) async {
+    debugPrint('$_tag _openAddOptionSheet start');
+
     final master = await ref.read(masterServiceOptionsProvider.future);
+    debugPrint('$_tag masterServiceOptions count=${master.length}');
+
     final existing = ref.read(shopServiceOptionsProvider).valueOrNull ?? [];
-    final usedIds = existing.map((e) => e.serviceOptionId).toSet();
+    debugPrint('$_tag existing options count=${existing.length}');
+
+    // Use serviceOptionId if available, else fallback to id (safe)
+    final usedIds = existing
+        .map((e) => e.serviceOptionId != 0 ? e.serviceOptionId : e.id)
+        .toSet();
 
     final available = master.where((o) => !usedIds.contains(o.id)).toList();
+    debugPrint('$_tag available master options=${available.length}');
+
     if (available.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -129,6 +252,7 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
     }
 
     if (!context.mounted) return;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -137,26 +261,50 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
         options: available,
         initial: null,
         onSave: (payload) async {
-          await ref.read(shopServiceOptionsProvider.notifier).create(payload);
-          if (context.mounted) Navigator.pop(context);
+          // ✅ log payload BEFORE sending
+          debugPrint('$_tag CREATE payload=$payload');
+
+          try {
+            await ref.read(shopServiceOptionsProvider.notifier).create(payload);
+
+            if (!context.mounted) return;
+            Navigator.pop(context); // close sheet only on success
+          } catch (e, st) {
+            debugPrint('$_tag create() threw: $e');
+            debugPrint('$_tag stack:\n$st');
+
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Create failed: $e')),
+            );
+          }
         },
       ),
     );
   }
 
   Future<void> _openEditOptionSheet(
-      BuildContext context, WidgetRef ref, ShopServiceOptionDto row) async {
-    // serviceOptionId is fixed on edit
+    BuildContext context,
+    WidgetRef ref,
+    ShopServiceOptionDto row,
+  ) async {
+    debugPrint('$_tag _openEditOptionSheet rowId=${row.id}');
+
+    // ✅ IMPORTANT: row.name/row.description do not exist on your DTO
+    // Use embedded serviceOption (if present) or minimal fallback
     final currentMaster = row.serviceOption ??
         ServiceOptionDto(
           id: row.serviceOptionId,
-          name: 'Option',
+          name: 'Option #',
+          description: '',
           kind: 'addon',
+          price: row.price,
           isActive: true,
           sortOrder: 0,
         );
 
     if (!context.mounted) return;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -166,8 +314,23 @@ class _ShopServiceOptionsScreenState extends ConsumerState<ShopServiceOptionsScr
         initial: row,
         isEdit: true,
         onSave: (payload) async {
-          await ref.read(shopServiceOptionsProvider.notifier).update(row.id, payload);
-          if (context.mounted) Navigator.pop(context);
+          debugPrint('$_tag UPDATE rowId=${row.id} payload=$payload');
+
+          try {
+            await ref
+                .read(shopServiceOptionsProvider.notifier)
+                .update(row.id, payload);
+
+            if (context.mounted) Navigator.pop(context);
+          } catch (e, st) {
+            debugPrint('$_tag update() threw: $e');
+            debugPrint('$_tag stack:\n$st');
+
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Update failed: $e')),
+            );
+          }
         },
       ),
     );
@@ -215,6 +378,8 @@ class _OptionCrudSheet extends StatefulWidget {
 }
 
 class _OptionCrudSheetState extends State<_OptionCrudSheet> {
+  static const _tag = '🧾[_OptionCrudSheet]';
+
   final _formKey = GlobalKey<FormState>();
 
   ServiceOptionDto? _selected;
@@ -222,10 +387,14 @@ class _OptionCrudSheetState extends State<_OptionCrudSheet> {
   final _sortCtrl = TextEditingController();
   bool _active = true;
 
+  bool _submitting = false;
+
   @override
   void initState() {
     super.initState();
     _selected = widget.options.first;
+
+    debugPrint('$_tag initState isEdit=${widget.isEdit} initial=${widget.initial != null}');
 
     if (widget.initial == null) {
       // default price from master option
@@ -264,14 +433,20 @@ class _OptionCrudSheetState extends State<_OptionCrudSheet> {
               children: [
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                  child: Text(
+                    widget.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 DropdownButtonFormField<int>(
                   value: _selected?.id,
                   items: widget.options
-                      .map((o) => DropdownMenuItem(value: o.id, child: Text(o.name)))
+                      .map((o) => DropdownMenuItem(
+                            value: o.id,
+                            child: Text(o.name),
+                          ))
                       .toList(),
                   onChanged: widget.isEdit
                       ? null
@@ -279,9 +454,9 @@ class _OptionCrudSheetState extends State<_OptionCrudSheet> {
                           final o = widget.options.firstWhere((x) => x.id == id);
                           setState(() {
                             _selected = o;
-                            // default price from master
                             _priceCtrl.text = (o.price ?? '0').toString();
                           });
+                          debugPrint('$_tag selected optionId=${o.id} name=${o.name} defaultPrice=${o.price}');
                         },
                   decoration: const InputDecoration(labelText: 'Service option'),
                 ),
@@ -315,20 +490,46 @@ class _OptionCrudSheetState extends State<_OptionCrudSheet> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: () async {
-                      if (!_formKey.currentState!.validate()) return;
+                    onPressed: _submitting
+                        ? null
+                        : () async {
+                            if (!_formKey.currentState!.validate()) return;
 
-                      final payload = <String, dynamic>{
-                        // ✅ always include service_option_id (backend may require it)
-                        'service_option_id': widget.initial?.serviceOptionId ?? _selected!.id,
-                        'price': num.tryParse(_priceCtrl.text.trim()) ?? 0,
-                        'sort_order': int.tryParse(_sortCtrl.text.trim()) ?? 0,
-                        'is_active': _active,
-                      };
+                            setState(() => _submitting = true);
 
-                      await widget.onSave(payload);
-                    },
-                    child: const Text('Save'),
+                            try {
+                              final payload = <String, dynamic>{
+                                // ✅ always include service_option_id
+                                'service_option_id':
+                                    widget.initial?.serviceOptionId ?? _selected!.id,
+                                'price': num.tryParse(_priceCtrl.text.trim()) ?? 0,
+                                'sort_order': int.tryParse(_sortCtrl.text.trim()) ?? 0,
+                                'is_active': _active,
+                              };
+
+                              debugPrint('$_tag submit payload=$payload');
+
+                              await widget.onSave(payload);
+                            } catch (e, st) {
+                              debugPrint('$_tag submit threw: $e');
+                              debugPrint('$_tag stack:\n$st');
+
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Save failed: $e')),
+                              );
+                            } finally {
+                              if (!mounted) return;
+                              setState(() => _submitting = false);
+                            }
+                          },
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Save'),
                   ),
                 ),
               ],
