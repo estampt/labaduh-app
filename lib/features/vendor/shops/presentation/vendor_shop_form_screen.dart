@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../domain/vendor_shop.dart';
+import '../domain/vendor_shop_model.dart';
 import '../state/vendor_shops_providers.dart';
 
 // ✅ adjust this import to your final path
@@ -35,7 +35,7 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
   bool _saving = false;
 
   // ✅ Address + Location
-  String? addressLine1;
+  String? addressLine2;
   LatLng? pickedLatLng;
 
   // ✅ Photo (single)
@@ -59,7 +59,7 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
     _isActive = s?.isActive ?? true;
 
     // keep these for picker label/center
-    addressLine1 = s?.addressLine1;
+    addressLine2 = s?.addressLine1;
     if (_lat != null && _lng != null) {
       pickedLatLng = LatLng(_lat!, _lng!);
     }
@@ -80,7 +80,7 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
     final res = await OSMMapLocationPicker.open(
       context,
       initialCenter: pickedLatLng,
-      initialLabel: addressLine1,
+      initialLabel: addressLine2,
     );
     if (!mounted || res == null) return;
 
@@ -90,9 +90,9 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
       // ✅ DON'T use labelText; put the address into the controller.
       // If your picker returns exactAddress, use it; otherwise use addressLabel.
       final addr = (res.exactAddress as String?)?.trim();
-      addressLine1 = (addr != null && addr.isNotEmpty) ? addr : res.addressLabel;
+      addressLine2 = (addr != null && addr.isNotEmpty) ? addr : res.addressLabel;
 
-      _address1.text = addressLine1 ?? '';
+      _address2.text = addressLine2 ?? '';
       _lat = pickedLatLng!.latitude;
       _lng = pickedLatLng!.longitude;
     });
@@ -209,23 +209,43 @@ class _VendorShopFormScreenState extends ConsumerState<VendorShopFormScreen> {
             ),
             const SizedBox(height: 10),
 
-            // ✅ Address Line 1: read-only + opens popup picker
+            /// =====================================================
+            /// ADDRESS LINE 1 (Manual input — REQUIRED)
+            /// =====================================================
             TextFormField(
               controller: _address1,
-              readOnly: true,
               decoration: const InputDecoration(
-                labelText: 'Address line 1',
-                hintText: 'Tap to select location',
-                suffixIcon: Icon(Icons.map_outlined),
+                labelText: 'Unit/House No',
+                hintText: 'Enter your unit or house number',
               ),
-              onTap: _pickLocation,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Select a location' : null,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Enter unit/house number';
+                }
+                return null;
+              },
             ),
 
             const SizedBox(height: 10),
+
+            /// =====================================================
+            /// ADDRESS LINE 2 (Map picker — REQUIRED)
+            /// =====================================================
             TextFormField(
               controller: _address2,
-              decoration: const InputDecoration(labelText: 'Address line 2 (optional)'),
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Address line 2',
+                hintText: 'Select from map',
+                suffixIcon: Icon(Icons.map_outlined),
+              ),
+              onTap: _pickLocation,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Select address from map';
+                }
+                return null;
+              },
             ),
 
             const SizedBox(height: 14),

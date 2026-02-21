@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 
-import '../domain/vendor_shop.dart';
+import '../domain/vendor_shop_model.dart';
 
 class VendorShopsRepository {
   VendorShopsRepository(this.api);

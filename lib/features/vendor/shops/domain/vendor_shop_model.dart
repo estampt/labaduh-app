@@ -13,6 +13,7 @@ class VendorShop {
   final double? longitude;
   final int? defaultMaxOrdersPerDay;
   final double? defaultMaxKgPerDay;
+  final String? profilePhotoURL;
   final bool isActive;
 
   VendorShop({
@@ -30,6 +31,7 @@ class VendorShop {
     this.longitude,
     this.defaultMaxOrdersPerDay,
     this.defaultMaxKgPerDay,
+    this.profilePhotoURL,
     required this.isActive,
   });
 
@@ -61,6 +63,7 @@ class VendorShop {
       longitude: _toDouble(json['longitude']),
       defaultMaxOrdersPerDay: _toInt(json['default_max_orders_per_day']),
       defaultMaxKgPerDay: _toDouble(json['default_max_kg_per_day']),
+      profilePhotoURL: json['profile_photo_url']?.toString(),
       isActive: json['is_active'] == true,
     );
   }
@@ -79,6 +82,7 @@ class VendorShop {
       'longitude': longitude?.toString(),
       'default_max_orders_per_day': defaultMaxOrdersPerDay,
       'default_max_kg_per_day': defaultMaxKgPerDay?.toStringAsFixed(2),
+      'profile_photo_url': profilePhotoURL,
       'is_active': isActive,
     };
   }
@@ -98,6 +102,7 @@ class VendorShop {
     double? longitude,
     int? defaultMaxOrdersPerDay,
     double? defaultMaxKgPerDay,
+    String? profilePhotoURL,
     bool? isActive,
   }) {
     return VendorShop(
@@ -115,6 +120,7 @@ class VendorShop {
       longitude: longitude ?? this.longitude,
       defaultMaxOrdersPerDay: defaultMaxOrdersPerDay ?? this.defaultMaxOrdersPerDay,
       defaultMaxKgPerDay: defaultMaxKgPerDay ?? this.defaultMaxKgPerDay,
+      profilePhotoURL: profilePhotoURL ?? this.profilePhotoURL,
       isActive: isActive ?? this.isActive,
     );
   }

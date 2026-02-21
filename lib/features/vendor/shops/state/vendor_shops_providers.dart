@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/auth/session_notifier.dart';
 import '../../../../core/network/api_client.dart';
 import '../data/vendor_shops_repository.dart';
-import '../domain/vendor_shop.dart';
+import '../domain/vendor_shop_model.dart';
 
 final vendorIdProvider = Provider<int>((ref) {
   final session = ref.watch(sessionNotifierProvider);

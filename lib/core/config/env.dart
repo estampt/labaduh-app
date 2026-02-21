@@ -18,7 +18,7 @@ class Env {
 
     return switch (mode) {
       EnvMode.dev => 'http://$host:8000/api/v1',
-      EnvMode.prod => 'http://$host:8000/api/v1',
+      EnvMode.prod => 'http://sandbox.estamp.co/api/v1',
     };
   }
 }

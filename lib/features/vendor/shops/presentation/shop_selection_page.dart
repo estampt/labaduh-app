@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/push/push_providers.dart';
 import '../../../../core/auth/session_notifier.dart';
-import '../domain/vendor_shop.dart';
+import '../domain/vendor_shop_model.dart';
 import '../state/vendor_shops_providers.dart';
 import 'dart:async';
 
