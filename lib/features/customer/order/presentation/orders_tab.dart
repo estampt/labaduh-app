@@ -28,22 +28,7 @@ class OrdersTab extends ConsumerStatefulWidget {
 }
 
 class _OrdersTabState extends ConsumerState<OrdersTab> {
-  Timer? _timer;
-  static const _pollInterval = Duration(seconds: 60);
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(_pollInterval, (_) {
-      ref.read(latestOrdersProvider.notifier).refresh();
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+  
 
   bool _isActiveStatus(String status) {
     final s = status.toLowerCase().trim();
@@ -228,7 +213,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
 
       // Refresh list (no await)
       // ignore: unawaited_futures
-      ref.read(latestOrdersProvider.notifier).refresh();
+      ref.invalidate(latestOrdersProvider);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -256,7 +241,12 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
           ),
         ],
       ),
+
+      // ✅ KEY: keep old data visible while refreshing/reloading
       body: latestAsync.when(
+        skipLoadingOnRefresh: true,
+        skipLoadingOnReload: true,
+
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Padding(
@@ -274,6 +264,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
             ),
           ),
         ),
+
         data: (state) {
           final active = state.orders.where((o) => _isActiveStatus(o.status)).toList();
 
@@ -304,96 +295,99 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () => ref.read(latestOrdersProvider.notifier).refresh(),
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              itemCount: active.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
-              itemBuilder: (_, i) {
-                final o = active[i];
-                final total = _computeOrderTotal(o);
-                final stepIndex = _statusToStepIndex(o.status);
-                
-                return _OrderDashboardCard(
-                  order: o,
-                  total: total,
-                  stepIndex: stepIndex,
-                  onOpenDetails: () => context.push('/c/orders/${o.id}'),
-                  onChatVendor: (o.partner == null) 
-                      ? null
-                      : () => context.push('/messages/orders', extra: o),
-                  
-                  onCompleteOrder: (o.status.toLowerCase().trim() == 'delivered')
-                      ? () async {
-                          try {
-                            final client = ref.read(apiClientProvider);
-                            final ordersApi = CustomerOrdersApi(client.dio);
+          // ✅ If provider is refreshing, show a tiny progress bar (background refresh)
+          final isRefreshing = latestAsync.isRefreshing || latestAsync.isReloading;
 
-                            await ordersApi.confirmDelivery(o.id);
+          return Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: () => ref.read(latestOrdersProvider.notifier).refresh(),
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  itemCount: active.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  itemBuilder: (_, i) {
+                    final o = active[i];
+                    final total = _computeOrderTotal(o);
+                    final stepIndex = _statusToStepIndex(o.status);
 
-                            if (!context.mounted) return;
+                    return _OrderDashboardCard(
+                      order: o,
+                      total: total,
+                      stepIndex: stepIndex,
+                      onOpenDetails: () => context.push('/c/orders/${o.id}'),
+                      onChatVendor: (o.partner == null)
+                          ? null
+                          : () => context.push('/messages/orders', extra: o),
+                      onCompleteOrder: (o.status.toLowerCase().trim() == 'delivered')
+                          ? () async {
+                              try {
+                                final client = ref.read(apiClientProvider);
+                                final ordersApi = CustomerOrdersApi(client.dio);
 
-                            // Navigate to feedback / review screen
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => OrderFeedbackScreen(
-                                  orderId: o.id,
-                                  showOrderCompletedMessage: true,
-                                ),
-                              ),
-                            );
+                                await ordersApi.confirmDelivery(o.id);
 
-                            // Refresh after navigate (no await)
-                            // ignore: unawaited_futures
-                            ref.read(latestOrdersProvider.notifier).refresh();
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to complete order: $e')),
-                            );
-                          }
-                        }
-                      : null,
+                                if (!context.mounted) return;
 
-                  onWeightReview:
-                    (o.status.toLowerCase().trim() == 'weight_reviewed')
-                        ? () async {
-                            try {
-                              if (!context.mounted) return;
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => OrderFeedbackScreen(
+                                      orderId: o.id,
+                                      showOrderCompletedMessage: true,
+                                    ),
+                                  ),
+                                );
 
-                              /// ✅ Navigate to Weight Review page
-                              final result = await Navigator.of(context).push<bool>(
-                              MaterialPageRoute(
-                                builder: (_) => WeightReviewScreen(
-                                  orderId: o.id,
-                                ),
-                              ),
-                            );
-
-                            if (result == true) {
-                              ref.read(latestOrdersProvider.notifier).refresh();
+                                // ignore: unawaited_futures
+                                ref.invalidate(latestOrdersProvider);
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to complete order: $e')),
+                                );
+                              }
                             }
+                          : null,
+                      onWeightReview: (o.status.toLowerCase().trim() == 'weight_reviewed')
+                          ? () async {
+                              try {
+                                if (!context.mounted) return;
 
-                            } catch (e) {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to open weight review: $e'),
-                                ),
-                              );
+                                final result = await Navigator.of(context).push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (_) => WeightReviewScreen(orderId: o.id),
+                                  ),
+                                );
+
+                                if (result == true) {
+                                  ref.invalidate(latestOrdersProvider);
+                                }
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to open weight review: $e')),
+                                );
+                              }
                             }
-                          }
-                        : null,
+                          : null,
+                      onCancelOrder: (o.status.toLowerCase().trim() == 'created' ||
+                              o.status.toLowerCase().trim() == 'published')
+                          ? () => _cancelOrder(o.id)
+                          : null,
+                    );
+                  },
+                ),
+              ),
 
-
-
-                  onCancelOrder: (o.status.toLowerCase().trim() == 'created' || o.status.toLowerCase().trim() == 'published')
-                      ? () => _cancelOrder(o.id)
-                      : null,
-                );
-              },
-            ),
+              // ✅ Tiny, non-blocking "refreshing" indicator
+              if (isRefreshing)
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+            ],
           );
         },
       ),

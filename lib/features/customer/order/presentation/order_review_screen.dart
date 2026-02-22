@@ -32,6 +32,44 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             children: [
               const Text(
+                'Pickup & Delivery',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  final scheduledText = _scheduledPickupDateText(draft, context);
+
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          _ReviewKeyValueRow(
+                            label: 'Pickup method',
+                            value: _pickupMethodText(draft, context),
+                          ),
+                          if (scheduledText != null) ...[
+                            const SizedBox(height: 8),
+                            _ReviewKeyValueRow(
+                              label: 'Pickup date',
+                              value: scheduledText,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          _ReviewKeyValueRow(
+                            label: 'Delivery method',
+                            value: _deliveryMethodText(draft),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 16),
+              const Text(
                 'Services',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
@@ -75,43 +113,7 @@ class _OrderReviewScreenState extends ConsumerState<OrderReviewScreen> {
                 );
               }),
 
-              const SizedBox(height: 16),
-              const Text(
-                'Pickup & Delivery',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Builder(
-                builder: (context) {
-                  final scheduledText = _scheduledPickupDateText(draft, context);
-
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          _ReviewKeyValueRow(
-                            label: 'Pickup method',
-                            value: _pickupMethodText(draft, context),
-                          ),
-                          if (scheduledText != null) ...[
-                            const SizedBox(height: 8),
-                            _ReviewKeyValueRow(
-                              label: 'Pickup date',
-                              value: scheduledText,
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          _ReviewKeyValueRow(
-                            label: 'Delivery method',
-                            value: _deliveryMethodText(draft),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
+              
 
               _TotalsSection(draft: draft),
             ],

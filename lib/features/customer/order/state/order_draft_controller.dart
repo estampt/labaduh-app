@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:flutter/foundation.dart'; // for debugPrint
 import '../models/discovery_service_models.dart';
 import '../models/order_payloads.dart';
 
@@ -225,15 +225,21 @@ class OrderDraftController extends Notifier<OrderDraftState> {
       return;
     }
 
-    if (mode == 'tomorrow') {
-      state = state.copyWith(
-        pickupMode: v,
-        pickupWindowStart: DateTime.now().add(const Duration(days: 1)),
-        pickupWindowEnd: null,
-      );
-      return;
-    }
+  if (mode == 'tomorrow') {
+    final tomorrowStart = DateTime.now().add(const Duration(days: 1));
 
+    debugPrint('📦 Pickup Mode: tomorrow');
+    debugPrint('📅 pickupWindowStart: $tomorrowStart');
+    debugPrint('📅 pickupWindowEnd: null');
+
+    state = state.copyWith(
+      pickupMode: v,
+      pickupWindowStart: tomorrowStart,
+      pickupWindowEnd: null,
+    );
+
+    return;
+  }
     if (mode == 'schedule') {
       state = state.copyWith(pickupMode: v);
       return;

@@ -23,7 +23,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
     super.initState();
 
     // Step animation text
-    Timer.periodic(const Duration(milliseconds: 1800), (timer) {
+    Timer.periodic(const Duration(milliseconds: 3600), (timer) {
       if (!mounted) return;
 
       setState(() {
@@ -61,7 +61,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
               const SizedBox(height: 24),
 
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
+                duration: const Duration(milliseconds: 1200),
                 child: Text(
                   _messages[_step],
                   key: ValueKey(_messages[_step]),

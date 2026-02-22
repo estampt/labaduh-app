@@ -3,13 +3,15 @@ class CreateOrderPayload {
   final double searchLng;
   final int radiusKm;
 
-  final String pickupMode;     // asap|tomorrow|schedule
-  final String deliveryMode;   // pickup_deliver|walk_in
+  final String pickupMode;     // asap | tomorrow | schedule
+  final String deliveryMode;   // pickup_deliver | walk_in
 
   final int pickupAddressId;
   final int deliveryAddressId;
+
   final DateTime? pickupWindowStart;
-  
+  final DateTime? pickupWindowEnd;
+
   final List<CreateOrderItemPayload> items;
 
   CreateOrderPayload({
@@ -21,23 +23,38 @@ class CreateOrderPayload {
     required this.pickupAddressId,
     required this.deliveryAddressId,
     required this.items,
-    this.pickupWindowStart, // ✅ add
+    this.pickupWindowStart,
+    this.pickupWindowEnd,
   });
 
-  Map<String, dynamic> toJson() => {
-        'search_lat': searchLat,
-        'search_lng': searchLng,
-        'radius_km': radiusKm,
-        'pickup_mode': pickupMode,
-        'delivery_mode': deliveryMode,
-        'pickup_address_id': pickupAddressId,
-        'delivery_address_id': deliveryAddressId,
-         // ✅ API expects this
-        if (pickupWindowStart != null)
-          'pickup_window_start': pickupWindowStart!.toIso8601String(),
-        'items': items.map((e) => e.toJson()).toList(),
+  Map<String, dynamic> toJson() {
+    DateTime? start = pickupWindowStart;
 
-      };
+    /// ✅ Auto-logic based on pickup mode
+    if (pickupMode == 'asap') {
+      start ??= DateTime.now(); // TODAY
+    } else if (pickupMode == 'tomorrow') {
+      start ??= DateTime.now().add(const Duration(days: 1));
+    }
+
+    return {
+      'search_lat': searchLat,
+      'search_lng': searchLng,
+      'radius_km': radiusKm,
+      'pickup_mode': pickupMode,
+      'delivery_mode': deliveryMode,
+      'pickup_address_id': pickupAddressId,
+      'delivery_address_id': deliveryAddressId,
+
+      if (start != null)
+        'pickup_window_start': start.toIso8601String(),
+
+      if (pickupWindowEnd != null)
+        'pickup_window_end': pickupWindowEnd!.toIso8601String(),
+
+      'items': items.map((e) => e.toJson()).toList(),
+    };
+  }
 }
 
 class CreateOrderItemPayload {
