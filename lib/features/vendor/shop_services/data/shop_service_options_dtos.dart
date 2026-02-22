@@ -52,8 +52,6 @@ class ServiceOptionDto {
 
 class ShopServiceOptionDto {
   final int id;
-  final String name;
-  final String description;
   final int shopServiceId;
   final int serviceOptionId;
   final String price;
@@ -63,8 +61,6 @@ class ShopServiceOptionDto {
 
   ShopServiceOptionDto({
     required this.id,
-    required this.name,
-    required this.description,
     required this.shopServiceId,
     required this.serviceOptionId,
     required this.price,
@@ -73,31 +69,17 @@ class ShopServiceOptionDto {
     this.serviceOption,
   });
 
-  /// ✅ Supports API shape:
-  /// options[] = ServiceOption + pivot{shop_service_id, service_option_id, price, is_active, sort_order}
   factory ShopServiceOptionDto.fromJson(Map<String, dynamic> j) {
-    final pivot = (j['pivot'] is Map<String, dynamic>)
-        ? (j['pivot'] as Map<String, dynamic>)
-        : const <String, dynamic>{};
-
     return ShopServiceOptionDto(
-      // using the ServiceOption id as this object's id (since no pivot id exists)
       id: _asInt(j['id']),
-      name: _asString(j['name']),
-      description: _asString(j['description']),
-
-      shopServiceId: _asInt(pivot['shop_service_id']),
-      serviceOptionId: _asInt(pivot['service_option_id'] ?? j['id']),
-
-      // ✅ prefer pivot price (shop-specific)
-      price: (pivot['price'] ?? j['price'])?.toString() ?? '0.00',
-
-      isActive: _asBool(pivot['is_active'] ?? j['is_active'], fallback: false),
-
-      sortOrder: _asInt(pivot['sort_order'] ?? j['sort_order']),
-
-      // ✅ service option details are the object itself
-      serviceOption: ServiceOptionDto.fromJson(j),
+      shopServiceId: _asInt(j['shop_service_id']),
+      serviceOptionId: _asInt(j['service_option_id']),
+      price: j['price']?.toString() ?? '0.00',
+      isActive: _asBool(j['is_active']),
+      sortOrder: _asInt(j['sort_order']),
+      serviceOption: j['service_option'] != null
+          ? ServiceOptionDto.fromJson(j['service_option'])
+          : null,
     );
   }
 }
